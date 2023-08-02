@@ -430,16 +430,16 @@ struct whisper_segment {
 //
 // default hparams (Whisper tiny)
 struct whisper_hparams {
-    int32_t n_vocab       = 51864;
+    // int32_t n_vocab       = 51864;
+    int32_t n_mels        = 80;
     int32_t n_audio_ctx   = 1500;
     int32_t n_audio_state = 384;
     int32_t n_audio_head  = 6;
     int32_t n_audio_layer = 4;
-    int32_t n_text_ctx    = 448;
-    int32_t n_text_state  = 384;
-    int32_t n_text_head   = 6;
-    int32_t n_text_layer  = 4;
-    int32_t n_mels        = 80;
+    // int32_t n_text_ctx    = 448;
+    // int32_t n_text_state  = 384;
+    // int32_t n_text_head   = 6;
+    // int32_t n_text_layer  = 4;
     int32_t ftype         = 1;
 };
 
@@ -766,11 +766,11 @@ static bool kv_cache_init(
         return false;
     }
 
-    const int n_text_state = hparams.n_text_state;
-    const int n_text_layer = hparams.n_text_layer;
+    //const int n_text_state = hparams.n_text_state;
+    //const int n_text_layer = hparams.n_text_layer;
 
-    const int n_mem      = n_text_layer*n_ctx;
-    const int n_elements = n_text_state*n_mem;
+    // const int n_mem      = n_text_layer*n_ctx;
+    // const int n_elements = n_text_state*n_mem;
 
     cache.k = ggml_new_tensor_1d(cache.ctx, wtype, n_elements);
     cache.v = ggml_new_tensor_1d(cache.ctx, wtype, n_elements);
@@ -850,19 +850,19 @@ static bool whisper_model_load(struct whisper_model_loader * loader, whisper_con
     {
         auto & hparams = model.hparams;
 
-        read_safe(loader, hparams.n_vocab);
+        // read_safe(loader, hparams.n_vocab);
         read_safe(loader, hparams.n_audio_ctx);
         read_safe(loader, hparams.n_audio_state);
         read_safe(loader, hparams.n_audio_head);
         read_safe(loader, hparams.n_audio_layer);
-        read_safe(loader, hparams.n_text_ctx);
-        read_safe(loader, hparams.n_text_state);
-        read_safe(loader, hparams.n_text_head);
-        read_safe(loader, hparams.n_text_layer);
+        // read_safe(loader, hparams.n_text_ctx);
+        // read_safe(loader, hparams.n_text_state);
+        // read_safe(loader, hparams.n_text_head);
+        // read_safe(loader, hparams.n_text_layer);
         read_safe(loader, hparams.n_mels);
         read_safe(loader, hparams.ftype);
 
-        assert(hparams.n_text_state == hparams.n_audio_state);
+        // assert(hparams.n_text_state == hparams.n_audio_state);
 
         if (hparams.n_audio_layer == 4) {
             model.type = e_model::MODEL_TINY;
@@ -898,15 +898,15 @@ static bool whisper_model_load(struct whisper_model_loader * loader, whisper_con
 
         const size_t scale = model.hparams.ftype ? 1 : 2;
 
-        log("%s: n_vocab       = %d\n", __func__, hparams.n_vocab);
+        // log("%s: n_vocab       = %d\n", __func__, hparams.n_vocab);
         log("%s: n_audio_ctx   = %d\n", __func__, hparams.n_audio_ctx);
         log("%s: n_audio_state = %d\n", __func__, hparams.n_audio_state);
         log("%s: n_audio_head  = %d\n", __func__, hparams.n_audio_head);
         log("%s: n_audio_layer = %d\n", __func__, hparams.n_audio_layer);
-        log("%s: n_text_ctx    = %d\n", __func__, hparams.n_text_ctx);
-        log("%s: n_text_state  = %d\n", __func__, hparams.n_text_state);
-        log("%s: n_text_head   = %d\n", __func__, hparams.n_text_head);
-        log("%s: n_text_layer  = %d\n", __func__, hparams.n_text_layer);
+        // log("%s: n_text_ctx    = %d\n", __func__, hparams.n_text_ctx);
+        // log("%s: n_text_state  = %d\n", __func__, hparams.n_text_state);
+        // log("%s: n_text_head   = %d\n", __func__, hparams.n_text_head);
+        // log("%s: n_text_layer  = %d\n", __func__, hparams.n_text_layer);
         log("%s: n_mels        = %d\n", __func__, hparams.n_mels);
         log("%s: ftype         = %d\n", __func__, model.hparams.ftype);
         log("%s: qntvr         = %d\n", __func__, qntvr);
@@ -990,7 +990,7 @@ static bool whisper_model_load(struct whisper_model_loader * loader, whisper_con
             //printf("%s: vocab[%d] = '%s'\n", __func__, i, word.c_str());
         }
 
-        vocab.n_vocab = model.hparams.n_vocab;
+        //vocab.n_vocab = model.hparams.n_vocab;
         if (vocab.is_multilingual()) {
             vocab.token_eot++;
             vocab.token_sot++;
@@ -1003,6 +1003,7 @@ static bool whisper_model_load(struct whisper_model_loader * loader, whisper_con
             vocab.token_beg++;
         }
 
+        /*
         if (n_vocab < model.hparams.n_vocab) {
             log("%s: adding %d extra tokens\n", __func__, model.hparams.n_vocab - n_vocab);
             for (int i = n_vocab; i < model.hparams.n_vocab; i++) {
@@ -1028,7 +1029,8 @@ static bool whisper_model_load(struct whisper_model_loader * loader, whisper_con
                 vocab.token_to_id[word] = i;
                 vocab.id_to_token[i] = word;
             }
-        }
+        } 
+        */
     }
 
     size_t ctx_size = 0;
@@ -1039,15 +1041,15 @@ static bool whisper_model_load(struct whisper_model_loader * loader, whisper_con
     {
         const auto & hparams = model.hparams;
 
-        const int n_vocab = hparams.n_vocab;
+        // const int n_vocab = hparams.n_vocab;
 
         const int n_audio_ctx   = hparams.n_audio_ctx;
         const int n_audio_state = hparams.n_audio_state;
         const int n_audio_layer = hparams.n_audio_layer;
 
-        const int n_text_ctx   = hparams.n_text_ctx;
-        const int n_text_state = hparams.n_text_state;
-        const int n_text_layer = hparams.n_text_layer;
+        // const int n_text_ctx   = hparams.n_text_ctx;
+        // const int n_text_state = hparams.n_text_state;
+        // const int n_text_layer = hparams.n_text_layer;
 
         const int n_mels = hparams.n_mels;
 
@@ -1065,6 +1067,7 @@ static bool whisper_model_load(struct whisper_model_loader * loader, whisper_con
             ctx_size += n_audio_state*ggml_type_sizef(GGML_TYPE_F32); // e_ln_b;
         }
 
+        /*
         // decoder
         {
             ctx_size += n_text_ctx*n_text_state*ggml_type_sizef(GGML_TYPE_F32); // d_pe;
@@ -1074,6 +1077,7 @@ static bool whisper_model_load(struct whisper_model_loader * loader, whisper_con
             ctx_size += n_text_state*ggml_type_sizef(GGML_TYPE_F32); // d_ln_w;
             ctx_size += n_text_state*ggml_type_sizef(GGML_TYPE_F32); // d_ln_b;
         }
+        */
 
         // encoder layers
         {
@@ -1101,6 +1105,7 @@ static bool whisper_model_load(struct whisper_model_loader * loader, whisper_con
             ctx_size += n_audio_layer*(              n_audio_state*ggml_type_sizef(GGML_TYPE_F32)); // attn_ln_1_b
         }
 
+        /*
         // decoder layers
         {
             ctx_size += n_text_layer*(n_text_state*ggml_type_sizef(GGML_TYPE_F32)); // mlp_ln_w
@@ -1140,8 +1145,10 @@ static bool whisper_model_load(struct whisper_model_loader * loader, whisper_con
             ctx_size += n_text_layer*(n_text_state*n_text_state*ggml_type_sizef(wtype));         // cross_attn_ln_1_w
             ctx_size += n_text_layer*(             n_text_state*ggml_type_sizef(GGML_TYPE_F32)); // cross_attn_ln_1_b
         }
+        */
 
-        ctx_size += (15 + 15*n_audio_layer + 24*n_text_layer)*512; // object overhead
+        //ctx_size += (15 + 15*n_audio_layer + 24*n_text_layer)*512; // object overhead
+        ctx_size += (15 + 15*n_audio_layer)*512; 
 
         log("%s: model ctx     = %7.2f MB\n", __func__, ctx_size/(1024.0*1024.0));
     }
@@ -1167,20 +1174,20 @@ static bool whisper_model_load(struct whisper_model_loader * loader, whisper_con
 
         const auto & hparams = model.hparams;
 
-        const int n_vocab = hparams.n_vocab;
+        // const int n_vocab = hparams.n_vocab;
 
         const int n_audio_ctx   = hparams.n_audio_ctx;
         const int n_audio_state = hparams.n_audio_state;
         const int n_audio_layer = hparams.n_audio_layer;
 
-        const int n_text_ctx   = hparams.n_text_ctx;
-        const int n_text_state = hparams.n_text_state;
-        const int n_text_layer = hparams.n_text_layer;
+        // const int n_text_ctx   = hparams.n_text_ctx;
+        // const int n_text_state = hparams.n_text_state;
+        // const int n_text_layer = hparams.n_text_layer;
 
         const int n_mels = hparams.n_mels;
 
         model.layers_encoder.resize(n_audio_layer);
-        model.layers_decoder.resize(n_text_layer);
+        // model.layers_decoder.resize(n_text_layer);
 
         // encoder
         {
@@ -1259,6 +1266,7 @@ static bool whisper_model_load(struct whisper_model_loader * loader, whisper_con
             }
         }
 
+        /*
         // decoder
         {
             model.d_pe   = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, n_text_state, n_text_ctx);
@@ -1356,6 +1364,7 @@ static bool whisper_model_load(struct whisper_model_loader * loader, whisper_con
             }
         }
     }
+    */
 
     // load weights
     {
