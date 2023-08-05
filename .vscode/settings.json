@@ -80,6 +80,8 @@
         "__verbose_abort": "cpp",
         "ios": "cpp",
         "queue": "cpp",
-        "stack": "cpp"
+        "stack": "cpp",
+        "any": "cpp",
+        "set": "cpp"
     }
 }

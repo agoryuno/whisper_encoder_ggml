@@ -1,3 +1,10 @@
+#ifdef DEBUG_MODE
+    #define DEBUG_PRINT_FUNC() printf("`%s` called\n", __func__)
+#else
+    #define DEBUG_PRINT_FUNC() // Empty definition if DEBUG_MODE is not defined
+#endif
+
+
 #define _GNU_SOURCE // Defines CLOCK_MONOTONIC on Linux
 #define _CRT_SECURE_NO_DEPRECATE // Disables ridiculous "unsafe" warnigns on Windows
 
@@ -4279,6 +4286,7 @@ static inline int ggml_up(int n, int m) {
 ////////////////////////////////////////////////////////////////////////////////
 
 struct ggml_context * ggml_init(struct ggml_init_params params) {
+    DEBUG_PRINT_FUNC();
     // make this function thread safe
     ggml_critical_section_start();
 
@@ -4362,6 +4370,11 @@ struct ggml_context * ggml_init(struct ggml_init_params params) {
     }
 
     const size_t mem_size = (params.mem_size + GGML_MEM_ALIGN - 1) & ~(GGML_MEM_ALIGN - 1);
+
+    #ifdef DEBUG_MODE
+        printf("`mem_size` = %zu", mem_size);
+    #endif
+
 
     *ctx = (struct ggml_context) {
         /*.mem_size           =*/ mem_size,
@@ -4627,11 +4640,7 @@ struct ggml_tensor * ggml_new_tensor(
         enum   ggml_type type,
         int    n_dims,
         const int64_t * ne) {
-    
-    #ifdef DEBUG_MODE
-        printf ("`%s` called.\n", __func__);
-    #endif
-
+    DEBUG_PRINT_FUNC();
     return ggml_new_tensor_impl(ctx, type, n_dims, ne, NULL);
 }
 
@@ -4639,6 +4648,7 @@ struct ggml_tensor * ggml_new_tensor_1d(
         struct ggml_context * ctx,
         enum   ggml_type type,
         int64_t ne0) {
+    DEBUG_PRINT_FUNC();
     return ggml_new_tensor(ctx, type, 1, &ne0);
 }
 
@@ -4648,6 +4658,7 @@ struct ggml_tensor * ggml_new_tensor_2d(
         int64_t ne0,
         int64_t ne1) {
     const int64_t ne[2] = { ne0, ne1 };
+    DEBUG_PRINT_FUNC();
     return ggml_new_tensor(ctx, type, 2, ne);
 }
 
@@ -4657,6 +4668,7 @@ struct ggml_tensor * ggml_new_tensor_3d(
         int64_t ne0,
         int64_t ne1,
         int64_t ne2) {
+    DEBUG_PRINT_FUNC();
     const int64_t ne[3] = { ne0, ne1, ne2 };
     return ggml_new_tensor(ctx, type, 3, ne);
 }
@@ -4668,11 +4680,13 @@ struct ggml_tensor * ggml_new_tensor_4d(
         int64_t ne1,
         int64_t ne2,
         int64_t ne3) {
+    DEBUG_PRINT_FUNC();
     const int64_t ne[4] = { ne0, ne1, ne2, ne3 };
     return ggml_new_tensor(ctx, type, 4, ne);
 }
 
 struct ggml_tensor * ggml_new_i32(struct ggml_context * ctx, int32_t value) {
+    DEBUG_PRINT_FUNC();
     ggml_scratch_save(ctx);
 
     struct ggml_tensor * result = ggml_new_tensor_1d(ctx, GGML_TYPE_I32, 1);
@@ -4685,6 +4699,8 @@ struct ggml_tensor * ggml_new_i32(struct ggml_context * ctx, int32_t value) {
 }
 
 struct ggml_tensor * ggml_new_f32(struct ggml_context * ctx, float value) {
+    DEBUG_PRINT_FUNC();
+
     ggml_scratch_save(ctx);
 
     struct ggml_tensor * result = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, 1);

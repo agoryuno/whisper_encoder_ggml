@@ -453,7 +453,7 @@ static bool encoder_model_load(struct encoder_model_loader * loader,
         const int32_t qntvr = hparams.ftype / GGML_QNT_VERSION_FACTOR;
 
         hparams.ftype %= GGML_QNT_VERSION_FACTOR;
-        
+
         // for the big tensors, we have the option to store the data in 16-bit floats or quantized
         // in order to save memory and also to speed up the computation
         wctx.wtype = ggml_ftype_to_ggml_type((ggml_ftype) (model.hparams.ftype));
@@ -504,6 +504,12 @@ static bool encoder_model_load(struct encoder_model_loader * loader,
         wctx.model.buf = new std::vector<uint8_t>();
         wctx.model.buf->resize(scale*MEM_REQ_MODEL.at(wctx.wtype).at(model.type));
 
+        #ifdef DEBUG_MODE
+            printf("MODEL SIZE:\n");
+            printf("\t`scale` = %zu\n", scale);
+            printf("\t`model.type` = %d\n", model.type);
+            printf("\t`wctx.model.buf.size()` = %zu\n", wctx.model.buf->size());
+        #endif
         // we skip initialization of the state until it is needed
         // because it might be that state will always be provided externally.
     }
@@ -582,6 +588,7 @@ static bool encoder_model_load(struct encoder_model_loader * loader,
         log("%s: model ctx     = %7.2f MB\n", __func__, ctx_size/(1024.0*1024.0));
     }
 
+    
     // create the ggml context
     {
         struct ggml_init_params params = {
@@ -589,6 +596,10 @@ static bool encoder_model_load(struct encoder_model_loader * loader,
             /*.mem_buffer =*/ wctx.model.buf->data(),
             /*.no_alloc   =*/ false,
         };
+
+        #ifdef DEBUG_MODE
+            printf("`params.mem_size` = %zu\n", params.mem_size);
+        #endif
 
         model.ctx = ggml_init(params);
         if (!model.ctx) {
