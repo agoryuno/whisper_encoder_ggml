@@ -4489,8 +4489,22 @@ struct ggml_tensor * ggml_new_tensor_impl(
         int    n_dims,
         const int64_t* ne,
         void*  data) {
+    
+    #ifdef DEBUG_MODE
+        printf("`%s` is called.\n", __func__);
+    #endif
+    
     // always insert objects at the end of the context's memory pool
     struct ggml_object * obj_cur = ctx->objects_end;
+
+    #ifdef DEBUG_MODE
+    // Log information about obj_cur
+    if (obj_cur == NULL) {
+        printf("obj_cur is NULL. No current object at the end of the context's memory pool.\n");
+    } else {
+        printf("obj_cur is set. Current object's offset: %zu, size: %zu.\n", obj_cur->offs, obj_cur->size);
+    }
+    #endif
 
     const size_t cur_offs = obj_cur == NULL ? 0 : obj_cur->offs;
     const size_t cur_size = obj_cur == NULL ? 0 : obj_cur->size;
@@ -4613,6 +4627,11 @@ struct ggml_tensor * ggml_new_tensor(
         enum   ggml_type type,
         int    n_dims,
         const int64_t * ne) {
+    
+    #ifdef DEBUG_MODE
+        printf ("`%s` called.\n", __func__);
+    #endif
+
     return ggml_new_tensor_impl(ctx, type, n_dims, ne, NULL);
 }
 

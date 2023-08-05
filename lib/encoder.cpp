@@ -346,7 +346,6 @@ struct encoder_model {
 };
 
 
-
 struct encoder_context {
     int64_t t_load_us  = 0;
     int64_t t_start_us = 0;
@@ -359,7 +358,6 @@ struct encoder_context {
 
     std::string path_model; // populated by whisper_init_from_file()
 };
-
 
 
 static void encoder_default_log(const char * text) {
@@ -432,7 +430,6 @@ static bool encoder_model_load(struct encoder_model_loader * loader,
         read_safe(loader, hparams.n_mels);
         read_safe(loader, hparams.ftype);
 
-
         if (hparams.n_audio_layer == 4) {
             model.type = e_model::MODEL_TINY;
         }
@@ -456,10 +453,15 @@ static bool encoder_model_load(struct encoder_model_loader * loader,
         const int32_t qntvr = hparams.ftype / GGML_QNT_VERSION_FACTOR;
 
         hparams.ftype %= GGML_QNT_VERSION_FACTOR;
-
+        
         // for the big tensors, we have the option to store the data in 16-bit floats or quantized
         // in order to save memory and also to speed up the computation
         wctx.wtype = ggml_ftype_to_ggml_type((ggml_ftype) (model.hparams.ftype));
+        
+        #ifdef DEBUG_MODE
+            printf("`ggml_ftype` = %d\n", wctx.wtype);
+        #endif
+
         if (wctx.wtype == GGML_TYPE_COUNT) {
             log("%s: invalid model (bad ftype value %d)\n", __func__, model.hparams.ftype);
             return false;
@@ -531,14 +533,10 @@ static bool encoder_model_load(struct encoder_model_loader * loader,
         const int n_audio_ctx   = hparams.n_audio_ctx;
         const int n_audio_state = hparams.n_audio_state;
         const int n_audio_layer = hparams.n_audio_layer;
-
-        // const int n_text_ctx   = hparams.n_text_ctx;
-        // const int n_text_state = hparams.n_text_state;
-        // const int n_text_layer = hparams.n_text_layer;
-
         const int n_mels = hparams.n_mels;
 
         // encoder
+
         {
             ctx_size += n_audio_ctx*n_audio_state*ggml_type_sizef(GGML_TYPE_F32); // e_pe;
 
@@ -552,17 +550,6 @@ static bool encoder_model_load(struct encoder_model_loader * loader,
             ctx_size += n_audio_state*ggml_type_sizef(GGML_TYPE_F32); // e_ln_b;
         }
 
-        /*
-        // decoder
-        {
-            ctx_size += n_text_ctx*n_text_state*ggml_type_sizef(GGML_TYPE_F32); // d_pe;
-
-            ctx_size += n_vocab*n_text_state*ggml_type_sizef(wtype); // d_te;
-
-            ctx_size += n_text_state*ggml_type_sizef(GGML_TYPE_F32); // d_ln_w;
-            ctx_size += n_text_state*ggml_type_sizef(GGML_TYPE_F32); // d_ln_b;
-        }
-        */
 
         // encoder layers
         {
@@ -622,25 +609,37 @@ static bool encoder_model_load(struct encoder_model_loader * loader,
         const int n_audio_state = hparams.n_audio_state;
         const int n_audio_layer = hparams.n_audio_layer;
 
-        // const int n_text_ctx   = hparams.n_text_ctx;
-        // const int n_text_state = hparams.n_text_state;
-        // const int n_text_layer = hparams.n_text_layer;
-
         const int n_mels = hparams.n_mels;
 
         model.layers_encoder.resize(n_audio_layer);
         // model.layers_decoder.resize(n_text_layer);
+        
+        #ifdef DEBUG_MODE
+            printf("`%s`: starting encoder conversion.\n", __func__);
+        #endif
 
         // encoder
         {
+            #ifdef DEBUG_MODE
+                printf("creating ggml tensor for PE\n");
+            #endif
             model.e_pe       = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, n_audio_state, n_audio_ctx);
 
+            #ifdef DEBUG_MODE
+                printf("creating ggml tensors for first Conv layer\n");
+            #endif
             model.e_conv_1_w = ggml_new_tensor_3d(ctx, vtype,         3, n_mels, n_audio_state);
             model.e_conv_1_b = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, 1, n_audio_state);
 
+            #ifdef DEBUG_MODE
+                printf("creating ggml tensors for second Conv layer\n");
+            #endif
             model.e_conv_2_w = ggml_new_tensor_3d(ctx, vtype,         3, n_audio_state, n_audio_state);
             model.e_conv_2_b = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, 1, n_audio_state);
 
+            #ifdef DEBUG_MODE
+                printf("creating ggml tensors for LayerNorm\n");
+            #endif
             model.e_ln_w     = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, n_audio_state);
             model.e_ln_b     = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, n_audio_state);
 
@@ -657,28 +656,57 @@ static bool encoder_model_load(struct encoder_model_loader * loader,
             model.tensors["encoder.ln_post.bias"]         = model.e_ln_b;
 
             for (int i = 0; i < n_audio_layer; ++i) {
+                #ifdef DEBUG_MODE
+                    printf("#################################\n");
+                    printf("creating ggml tensors for layer %d\n", i);
+                    printf("#################################\n");
+                #endif
                 auto & layer = model.layers_encoder[i];
 
+                #ifdef DEBUG_MODE
+                    printf("creating ggml tensors for LN layer\n");
+                #endif
                 layer.mlp_ln_w    = ggml_new_tensor_1d(ctx, GGML_TYPE_F32,   n_audio_state);
                 layer.mlp_ln_b    = ggml_new_tensor_1d(ctx, GGML_TYPE_F32,   n_audio_state);
 
+                #ifdef DEBUG_MODE
+                    printf("creating ggml tensors for MLP layer 1\n");
+                #endif
                 layer.mlp_0_w     = ggml_new_tensor_2d(ctx, wtype,           n_audio_state, 4*n_audio_state);
                 layer.mlp_0_b     = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, 4*n_audio_state);
 
+                #ifdef DEBUG_MODE
+                    printf("creating ggml tensors for MLP layer 2\n");
+                #endif
                 layer.mlp_1_w     = ggml_new_tensor_2d(ctx, wtype,         4*n_audio_state, n_audio_state);
                 layer.mlp_1_b     = ggml_new_tensor_1d(ctx, GGML_TYPE_F32,   n_audio_state);
 
+                #ifdef DEBUG_MODE
+                    printf("creating ggml tensors for attn LN layer 1\n");
+                #endif
                 layer.attn_ln_0_w = ggml_new_tensor_1d(ctx, GGML_TYPE_F32,   n_audio_state);
                 layer.attn_ln_0_b = ggml_new_tensor_1d(ctx, GGML_TYPE_F32,   n_audio_state);
 
+                #ifdef DEBUG_MODE
+                    printf("creating ggml tensors for attn Q\n");
+                #endif
                 layer.attn_q_w    = ggml_new_tensor_2d(ctx, wtype,           n_audio_state, n_audio_state);
                 layer.attn_q_b    = ggml_new_tensor_1d(ctx, GGML_TYPE_F32,   n_audio_state);
 
+                #ifdef DEBUG_MODE
+                    printf("creating ggml tensors for attn K\n");
+                #endif
                 layer.attn_k_w    = ggml_new_tensor_2d(ctx, wtype,           n_audio_state, n_audio_state);
 
+                #ifdef DEBUG_MODE
+                    printf("creating ggml tensors for attn V\n");
+                #endif
                 layer.attn_v_w    = ggml_new_tensor_2d(ctx, wtype,           n_audio_state, n_audio_state);
                 layer.attn_v_b    = ggml_new_tensor_1d(ctx, GGML_TYPE_F32,   n_audio_state);
 
+                #ifdef DEBUG_MODE
+                    printf("creating ggml tensors for LN 2\n");
+                #endif
                 layer.attn_ln_1_w = ggml_new_tensor_2d(ctx, wtype,           n_audio_state, n_audio_state);
                 layer.attn_ln_1_b = ggml_new_tensor_1d(ctx, GGML_TYPE_F32,   n_audio_state);
 
@@ -795,6 +823,10 @@ static bool encoder_model_load(struct encoder_model_loader * loader,
 
 struct encoder_context * encoder_init_no_state(struct encoder_model_loader * loader) {
     ggml_time_init();
+
+    #ifdef DEBUG_MODE
+        printf("`%s` called.\n", __func__);
+    #endif
 
     encoder_context * ctx = new encoder_context;
 

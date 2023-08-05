@@ -1,4 +1,4 @@
 #!/bin/sh
 
-gcc -c ../lib/ggml.c -o ../lib/ggml.o
-g++ run.cpp ../lib/encoder.cpp  ../lib/common/common.cpp ../lib/ggml.o -o run-tests -Ilib -Wfatal-errors -lgtest
+gcc -DDEBUG_MODE -c ../lib/ggml.c -o ../lib/ggml.o
+g++ -DDEBUG_MODE run.cpp ../lib/encoder.cpp  ../lib/common/common.cpp ../lib/ggml.o -o run-tests -Ilib -Wfatal-errors -lgtest
