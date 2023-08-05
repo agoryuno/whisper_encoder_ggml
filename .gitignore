@@ -1,2 +1,5 @@
 /build
 encoder.o
+lib/ggml.o
+tests/run-tests
+encoder_cli
