@@ -3,7 +3,7 @@
 #include "gtest/gtest.h"
 #include "../lib/encoder.h"
 
-const char* valid_model_file_path = "../ggml-model.bin";
+const char* valid_model_file_path = "../ggml-model-small.bin";
 const char* invalid_model_file_path = "invalid-path";
 
 TEST(EncoderTest, InitFromFileNoState_ValidModelFile) {

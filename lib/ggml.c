@@ -4372,7 +4372,7 @@ struct ggml_context * ggml_init(struct ggml_init_params params) {
     const size_t mem_size = (params.mem_size + GGML_MEM_ALIGN - 1) & ~(GGML_MEM_ALIGN - 1);
 
     #ifdef DEBUG_MODE
-        printf("`mem_size` = %zu", mem_size);
+        printf("`mem_size` = %zu\n", mem_size);
     #endif
 
 
@@ -4541,7 +4541,7 @@ struct ggml_tensor * ggml_new_tensor_impl(
         size_needed += GGML_TENSOR_SIZE;
 
         if (cur_end + size_needed + GGML_OBJECT_SIZE > ctx->mem_size) {
-            GGML_PRINT("%s: not enough space in the context's memory pool (needed %zu, available %zu)\n",
+            GGML_PRINT("%s: (1) not enough space in the context's memory pool (needed %zu, available %zu)\n",
                     __func__, cur_end + size_needed + GGML_OBJECT_SIZE, ctx->mem_size);
             assert(false);
             return NULL;
@@ -4561,7 +4561,7 @@ struct ggml_tensor * ggml_new_tensor_impl(
         }
 
         if (cur_end + GGML_TENSOR_SIZE + GGML_OBJECT_SIZE > ctx->mem_size) {
-            GGML_PRINT("%s: not enough space in the context's memory pool (needed %zu, available %zu)\n",
+            GGML_PRINT("%s: (2) not enough space in the context's memory pool (needed %zu, available %zu)\n",
                     __func__, cur_end + GGML_TENSOR_SIZE + GGML_OBJECT_SIZE, ctx->mem_size);
             assert(false);
             return NULL;
