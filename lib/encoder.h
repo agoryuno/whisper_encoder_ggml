@@ -19,6 +19,8 @@
 #    define WHISPER_API
 #endif
 
+#define ENCODER_SAMPLE_RATE 16000
+
 struct encoder_context;
 struct encoder_full_params;
 

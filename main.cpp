@@ -1,9 +1,9 @@
-#include "common.h"
+#include "lib/common/common.h"
 #include <iostream>
 #include <vector>
 #include <algorithm>
 #include <cctype>
-#include "encoder.h"
+#include "lib/encoder.h"
 
 int main(int argc, char** argv) {
     if(argc < 3) {
@@ -14,7 +14,7 @@ int main(int argc, char** argv) {
     const char* model_path = argv[1];
     const char* fname_inp = argv[2];
     bool optional_arg = false;
-    
+
     if (argc > 3) {
         std::string arg(argv[3]);
         std::transform(arg.begin(), arg.end(), arg.begin(), ::tolower);
@@ -33,6 +33,10 @@ int main(int argc, char** argv) {
 
     std::vector<float> pcmf32;               // mono-channel F32 PCM
     std::vector<std::vector<float>> pcmf32s; // stereo-channel F32 PCM
+
+    if (!::read_wav(fname_inp, pcmf32, pcmf32s, false)) {
+        fprintf(stderr, "error: failed to read WAV file '%s'\n", fname_inp);
+    }
 
     encoder_full_params eparams = encoder_full_default_params();
     // TODO: Use the context for something

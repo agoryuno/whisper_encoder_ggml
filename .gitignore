@@ -6,3 +6,4 @@ encoder_cli
 tests/test.log
 ggml-model-small.bin
 ggml-model.bin
+test-audio.wav
