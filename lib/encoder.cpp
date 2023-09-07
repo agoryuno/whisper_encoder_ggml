@@ -295,12 +295,7 @@ struct encoder_layer {
     struct ggml_tensor * mlp_1_b;
 };
 
-struct encoder_filters {
-    int32_t n_mel;
-    int32_t n_fft;
 
-    std::vector<float> data;
-};
 
 struct encoder_model {
     e_model type = MODEL_UNKNOWN;

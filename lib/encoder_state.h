@@ -1,7 +1,18 @@
 #ifndef ENCODER_STATE_H
 #define ENCODER_STATE_H
 
+#define ENCODER_SAMPLE_RATE 16000
 #define ENCODER_MAX_SCRATCH_BUFFERS 16
+#define ENCODER_N_FFT       400
+
+#define SIN_COS_N_COUNT ENCODER_N_FFT
+
+struct encoder_filters {
+    int32_t n_mel;
+    int32_t n_fft;
+
+    std::vector<float> data;
+};
 
 struct encoder_mel {
     int n_len;
