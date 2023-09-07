@@ -342,24 +342,21 @@ struct encoder_model {
 };
 
 
-struct encoder_context {
-    int64_t t_load_us  = 0;
-    int64_t t_start_us = 0;
-
-    ggml_type wtype = ggml_type::GGML_TYPE_F16; // weight type (FP32 / FP16 / QX)
-    ggml_type itype = ggml_type::GGML_TYPE_F16; // intermediate type (FP32 or FP16)
-
-    encoder_model model;
-    encoder_state * state = nullptr;
-
-    std::string path_model; // populated by whisper_init_from_file()
-};
+static void log(const char * fmt, ...) {
+    if (!whisper_log) return;
+    char buf[1024];
+    va_list args;
+    va_start(args, fmt);
+    vsnprintf(buf, sizeof(buf), fmt, args);
+    whisper_log(buf);
+}
 
 
 struct encoder_full_params encoder_full_default_params() {
     struct encoder_full_params result = {
         /* offset_ms */      0,
         /* duration_ms */    0,
+        /*.n_threads */      std::min(4, (int32_t) std::thread::hardware_concurrency()),
         /* single_segment */ false,
         /* print_progress */ false,
 
@@ -369,22 +366,6 @@ struct encoder_full_params encoder_full_default_params() {
     };
     return result;
 };
-
-
-static void encoder_default_log(const char * text) {
-    fprintf(stderr, "%s", text);
-}
-
-static encoder_log_callback whisper_log = encoder_default_log;
-
-static void log(const char * fmt, ...) {
-    if (!whisper_log) return;
-    char buf[1024];
-    va_list args;
-    va_start(args, fmt);
-    vsnprintf(buf, sizeof(buf), fmt, args);
-    whisper_log(buf);
-}
 
 
 template<typename T>
@@ -904,116 +885,7 @@ struct encoder_context * encoder_init_from_file_no_state(const char * path_model
 };
 
 
-// ref: https://github.com/openai/whisper/blob/main/whisper/audio.py#L110-L157
-static bool log_mel_spectrogram(
-              encoder_state & estate,
-              const float * samples,
-              const int   n_samples,
-              const int   /*sample_rate*/,
-              const int   frame_size,
-              const int   frame_step,
-              const int   n_mel,
-              const int   n_threads,
-              const encoder_filters & filters,
-              const bool   debug,
-              encoder_mel & mel) {
-    const int64_t t_start_us = ggml_time_us();
-
-    // Hanning window (Use cosf to eliminate difference)
-    // ref: https://pytorch.org/docs/stable/generated/torch.hann_window.html
-    // ref: https://github.com/openai/whisper/blob/main/whisper/audio.py#L147
-    std::vector<float> hann;
-    hann_window(frame_size, true, hann);
-
-
-    // Calculate the length of padding
-    int64_t stage_1_pad = ENCODER_SAMPLE_RATE * 30;
-    int64_t stage_2_pad = frame_size / 2;
-
-    // Initialize a vector and copy data from C array to it.
-    std::vector<float> samples_padded;
-    samples_padded.resize(n_samples + stage_1_pad + stage_2_pad * 2);
-    std::copy(samples, samples + n_samples, samples_padded.begin() + stage_2_pad);
-
-    // pad 30 seconds of zeros at the end of audio (480,000 samples) + reflective pad 200 samples at the end of audio
-    std::fill(samples_padded.begin() + n_samples + stage_2_pad, samples_padded.begin() + n_samples + stage_1_pad + 2 * stage_2_pad, 0);
-
-    // reflective pad 200 samples at the beginning of audio
-    std::reverse_copy(samples + 1, samples + 1 + stage_2_pad, samples_padded.begin());
-
-    mel.n_mel     = n_mel;
-    // https://github.com/pytorch/pytorch/blob/main/aten/src/ATen/native/SpectralOps.cpp#L936
-    // Calculate number of frames + remove the last frame
-    mel.n_len     = (samples_padded.size() - frame_size) / frame_step;
-    // Calculate semi-padded sample length to ensure compatibility
-    mel.n_len_org = 1 + (n_samples + stage_2_pad - frame_size) / frame_step;
-    mel.data.resize(mel.n_mel * mel.n_len);
-
-
-    {
-        std::vector<std::thread> workers(n_threads - 1);
-        for (int iw = 0; iw < n_threads - 1; ++iw) {
-            workers[iw] = std::thread(
-                    log_mel_spectrogram_worker_thread, iw + 1, std::cref(hann), samples_padded,
-                    n_samples + stage_2_pad, frame_size, frame_step, n_threads,
-                    std::cref(filters), std::ref(mel));
-        }
-
-        // main thread
-        log_mel_spectrogram_worker_thread(0, hann, samples_padded, n_samples + stage_2_pad, frame_size, frame_step, n_threads, filters, mel);
-
-        for (int iw = 0; iw < n_threads - 1; ++iw) {
-            workers[iw].join();
-        }
-    }
-
-    // clamping and normalization
-    double mmax = -1e20;
-    for (int i = 0; i < mel.n_mel*mel.n_len; i++) {
-        if (mel.data[i] > mmax) {
-            mmax = mel.data[i];
-        }
-    }
-
-    mmax -= 8.0;
-
-    for (int i = 0; i < mel.n_mel*mel.n_len; i++) {
-        if (mel.data[i] < mmax) {
-            mel.data[i] = mmax;
-        }
-
-        mel.data[i] = (mel.data[i] + 4.0)/4.0;
-    }
-
-    wstate.t_mel_us += ggml_time_us() - t_start_us;
-
-    // Dump log_mel_spectrogram
-    if (debug) {
-        std::ofstream outFile("log_mel_spectrogram.json");
-        outFile << "[";
-        for (uint64_t i = 0; i < mel.data.size() - 1; i++) {
-            outFile << mel.data[i] << ", ";
-        }
-        outFile << mel.data[mel.data.size() - 1] << "]";
-        outFile.close();
-    }
-
-    return true;
-}
-
-
-
-int whisper_pcm_to_mel_with_state(struct whisper_context * ctx, struct whisper_state * state, const float * samples, int n_samples, int n_threads) {
-    if (!log_mel_spectrogram(*state, samples, n_samples, WHISPER_SAMPLE_RATE, WHISPER_N_FFT, WHISPER_HOP_LENGTH, WHISPER_N_MEL, n_threads, ctx->model.filters, false, state->mel)) {
-        log("%s: failed to compute mel spectrogram\n", __func__);
-        return -1;
-    }
-
-    return 0;
-}
-
-
-int whisper_full_with_state(
+int encoder_full_with_state(
         struct encoder_context * ctx,
           struct encoder_state * state,
     struct encoder_full_params   params,
@@ -1031,28 +903,15 @@ int whisper_full_with_state(
             log("%s: failed to compute log mel spectrogram\n", __func__);
             return -1;
         } else {
-            if (whisper_pcm_to_mel_with_state(ctx, state, samples, n_samples, params.n_threads) != 0) {
+            if (whisper_pcm_to_mel_with_state(
+                            ctx, 
+                            state, 
+                            samples, 
+                            n_samples, 
+                            params.n_threads) != 0) {
                 log("%s: failed to compute log mel spectrogram\n", __func__);
                 return -2;
             }
-        }
-    }
-
-    // auto-detect language if not specified
-    if (params.language == nullptr || strlen(params.language) == 0 || strcmp(params.language, "auto") == 0 || params.detect_language) {
-        std::vector<float> probs(whisper_lang_max_id() + 1, 0.0f);
-
-        const auto lang_id = whisper_lang_auto_detect_with_state(ctx, state, 0, params.n_threads, probs.data());
-        if (lang_id < 0) {
-            log("%s: failed to auto-detect language\n", __func__);
-            return -3;
-        }
-        state->lang_id = lang_id;
-        params.language = whisper_lang_str(lang_id);
-
-        log("%s: auto-detected language: %s (p = %f)\n", __func__, params.language, probs[whisper_lang_id(params.language)]);
-        if (params.detect_language) {
-            return 0;
         }
     }
 

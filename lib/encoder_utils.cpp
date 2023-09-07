@@ -1,11 +1,29 @@
+#include <algorithm>
 #include <cstdio>
 #include <cmath>
+#include <thread>
+#include <fstream>
 
 #include "encoder_utils.h"
 
 
+static void encoder_default_log(const char * text) {
+    fprintf(stderr, "%s", text);
+}
+
 static float sin_vals[SIN_COS_N_COUNT];
 static float cos_vals[SIN_COS_N_COUNT];
+
+static encoder_log_callback encoder_log = encoder_default_log;
+
+static void log(const char * fmt, ...) {
+    if (!encoder_log) return;
+    char buf[1024];
+    va_list args;
+    va_start(args, fmt);
+    vsnprintf(buf, sizeof(buf), fmt, args);
+    encoder_log(buf);
+}
 
 
 static bool hann_window(int length, bool periodic, std::vector<float> & output) {
@@ -103,6 +121,151 @@ static void fft(const std::vector<float> & in, std::vector<float> & out) {
         out[2*(k + N/2) + 0] = even_fft[2*k + 0] - re*re_odd + im*im_odd;
         out[2*(k + N/2) + 1] = even_fft[2*k + 1] - re*im_odd - im*re_odd;
     }
+}
+
+
+// ref: https://github.com/openai/whisper/blob/main/whisper/audio.py#L110-L157
+static bool log_mel_spectrogram(
+              encoder_state & estate,
+              const float * samples,
+              const int   n_samples,
+              const int   /*sample_rate*/,
+              const int   frame_size,
+              const int   frame_step,
+              const int   n_mel,
+              const int   n_threads,
+              const encoder_filters & filters,
+              const bool   debug,
+              encoder_mel & mel) {
+    const int64_t t_start_us = ggml_time_us();
+
+    // Hanning window (Use cosf to eliminate difference)
+    // ref: https://pytorch.org/docs/stable/generated/torch.hann_window.html
+    // ref: https://github.com/openai/whisper/blob/main/whisper/audio.py#L147
+    std::vector<float> hann;
+    hann_window(frame_size, true, hann);
+
+
+    // Calculate the length of padding
+    int64_t stage_1_pad = ENCODER_SAMPLE_RATE * 30;
+    int64_t stage_2_pad = frame_size / 2;
+
+    // Initialize a vector and copy data from C array to it.
+    std::vector<float> samples_padded;
+    samples_padded.resize(n_samples + stage_1_pad + stage_2_pad * 2);
+    std::copy(samples, samples + n_samples, samples_padded.begin() + stage_2_pad);
+
+    // pad 30 seconds of zeros at the end of audio (480,000 samples) + reflective pad 200 samples at the end of audio
+    std::fill(samples_padded.begin() + n_samples + stage_2_pad, samples_padded.begin() + n_samples + stage_1_pad + 2 * stage_2_pad, 0);
+
+    // reflective pad 200 samples at the beginning of audio
+    std::reverse_copy(samples + 1, samples + 1 + stage_2_pad, samples_padded.begin());
+
+    mel.n_mel     = n_mel;
+    // https://github.com/pytorch/pytorch/blob/main/aten/src/ATen/native/SpectralOps.cpp#L936
+    // Calculate number of frames + remove the last frame
+    mel.n_len     = (samples_padded.size() - frame_size) / frame_step;
+    // Calculate semi-padded sample length to ensure compatibility
+    mel.n_len_org = 1 + (n_samples + stage_2_pad - frame_size) / frame_step;
+    mel.data.resize(mel.n_mel * mel.n_len);
+
+
+    {
+        std::vector<std::thread> workers(n_threads - 1);
+        for (int iw = 0; iw < n_threads - 1; ++iw) {
+            workers[iw] = std::thread(
+                    log_mel_spectrogram_worker_thread, iw + 1, std::cref(hann), samples_padded,
+                    n_samples + stage_2_pad, frame_size, frame_step, n_threads,
+                    std::cref(filters), std::ref(mel));
+        }
+
+        // main thread
+        log_mel_spectrogram_worker_thread(0, hann, samples_padded, n_samples + stage_2_pad, frame_size, frame_step, n_threads, filters, mel);
+
+        for (int iw = 0; iw < n_threads - 1; ++iw) {
+            workers[iw].join();
+        }
+    }
+
+    // clamping and normalization
+    double mmax = -1e20;
+    for (int i = 0; i < mel.n_mel*mel.n_len; i++) {
+        if (mel.data[i] > mmax) {
+            mmax = mel.data[i];
+        }
+    }
+
+    mmax -= 8.0;
+
+    for (int i = 0; i < mel.n_mel*mel.n_len; i++) {
+        if (mel.data[i] < mmax) {
+            mel.data[i] = mmax;
+        }
+
+        mel.data[i] = (mel.data[i] + 4.0)/4.0;
+    }
+
+    estate.t_mel_us += ggml_time_us() - t_start_us;
+
+    // Dump log_mel_spectrogram
+    if (debug) {
+        std::ofstream outFile("log_mel_spectrogram.json");
+        outFile << "[";
+        for (uint64_t i = 0; i < mel.data.size() - 1; i++) {
+            outFile << mel.data[i] << ", ";
+        }
+        outFile << mel.data[mel.data.size() - 1] << "]";
+        outFile.close();
+    }
+
+    return true;
+}
+
+
+// average the fabs of the signal
+static std::vector<float> get_signal_energy(
+                const float * signal, 
+                int n_samples, 
+                int n_samples_per_half_window) {
+    const int hw = n_samples_per_half_window;
+
+    std::vector<float> result(n_samples);
+
+    for (int i = 0; i < n_samples; i++) {
+        float sum = 0;
+        for (int j = -hw; j <= hw; j++) {
+            if (i + j >= 0 && i + j < n_samples) {
+                sum += fabs(signal[i + j]);
+            }
+        }
+        result[i] = sum/(2*hw + 1);
+    }
+
+    return result;
+}
+
+int whisper_pcm_to_mel_with_state(
+            struct encoder_context * ctx, 
+            struct encoder_state * state, 
+            const float * samples, 
+            int n_samples, 
+            int n_threads) {
+    if (!log_mel_spectrogram(
+                *state, samples, 
+                n_samples, 
+                ENCODER_SAMPLE_RATE, 
+                ENCODER_N_FFT, 
+                ENCODER_HOP_LENGTH, 
+                ENCODER_N_MEL, 
+                n_threads, 
+                ctx->model.filters, 
+                false, 
+                state->mel)) {
+        log("%s: failed to compute mel spectrogram\n", __func__);
+        return -1;
+    }
+
+    return 0;
 }
 
 

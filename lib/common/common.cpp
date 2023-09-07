@@ -21,6 +21,7 @@
 #pragma warning(disable: 4244 4267) // possible loss of data
 #endif
 
+
 bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
     for (int i = 1; i < argc; i++) {
         std::string arg = argv[i];

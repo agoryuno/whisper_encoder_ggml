@@ -19,12 +19,12 @@
 #    define WHISPER_API
 #endif
 
-#define ENCODER_SAMPLE_RATE 16000
+
 
 struct encoder_context;
 struct encoder_full_params;
 
-typedef void (*encoder_log_callback)(const char * line);
+
 
 typedef struct encoder_model_loader {
     void * context;
@@ -44,6 +44,7 @@ WHISPER_API struct encoder_context * encoder_init_from_file_no_state(const char 
 struct encoder_full_params {
     int offset_ms;          // start offset in ms
     int duration_ms;        // audio duration to process in ms
+    int n_threads;
 
     bool single_segment;    // force single segment output (useful for streaming)
     bool print_progress;    // print progress information

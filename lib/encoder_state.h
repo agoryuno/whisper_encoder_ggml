@@ -4,6 +4,8 @@
 #define ENCODER_SAMPLE_RATE 16000
 #define ENCODER_MAX_SCRATCH_BUFFERS 16
 #define ENCODER_N_FFT       400
+#define ENCODER_HOP_LENGTH  160
+#define ENCODER_N_MEL       80
 
 #define SIN_COS_N_COUNT ENCODER_N_FFT
 
@@ -21,6 +23,21 @@ struct encoder_mel {
 
     std::vector<float> data;
 };
+
+
+struct encoder_context {
+    int64_t t_load_us  = 0;
+    int64_t t_start_us = 0;
+
+    ggml_type wtype = ggml_type::GGML_TYPE_F16; // weight type (FP32 / FP16 / QX)
+    ggml_type itype = ggml_type::GGML_TYPE_F16; // intermediate type (FP32 or FP16)
+
+    encoder_model model;
+    encoder_state * state = nullptr;
+
+    std::string path_model; // populated by whisper_init_from_file()
+};
+
 
 struct encoder_state {
     int64_t t_sample_us = 0;
@@ -58,6 +75,7 @@ struct encoder_state {
     int32_t exp_n_audio_ctx = 0; // 0 - use default
 
     void use_buf(struct ggml_context * ctx, int i) {
+
 #if defined(WHISPER_USE_SCRATCH)
         size_t last_size = 0;
 
