@@ -19,6 +19,9 @@
 #    define WHISPER_API
 #endif
 
+struct encoder_context;
+struct encoder_full_params;
+
 typedef void (*encoder_log_callback)(const char * line);
 
 typedef struct encoder_model_loader {
@@ -28,11 +31,38 @@ typedef struct encoder_model_loader {
     void  (*close)(void * ctx);
 } encoder_model_loader;
 
-struct encoder_context;
-
 // This function will properly delete an instance of encoder_context
 void encoder_context_destroy(encoder_context* ctx);
 
 WHISPER_API struct encoder_context * encoder_init_from_file_no_state(const char * path_model);
+
+// Parameters for the encoder_full() function
+// If you change the order or add new parameters, make sure to update the default values in whisper.cpp:
+// encoder_full_default_params()
+struct encoder_full_params {
+    int offset_ms;          // start offset in ms
+    int duration_ms;        // audio duration to process in ms
+
+    bool single_segment;    // force single segment output (useful for streaming)
+    bool print_progress;    // print progress information
+
+    // [EXPERIMENTAL] speed-up techniques
+    // note: these can significantly reduce the quality of the output
+    bool speed_up;          // speed-up the audio by 2x using Phase Vocoder
+    bool debug_mode;        // enable debug_mode provides extra info (eg. Dump log_mel)
+    int  audio_ctx;         // overwrite the audio context size (0 = use default)
+
+    // [EXPERIMENTAL] [TDRZ] tinydiarize
+    bool tdrz_enable;       // enable tinydiarize speaker turn detection
+
+    // for auto-detection, set to nullptr, "" or "auto"
+    const char * language;
+    bool detect_language;
+
+    void * encoder_begin_callback_user_data;
+
+};
+
+WHISPER_API struct encoder_full_params encoder_full_default_params();
 
 #endif

@@ -323,14 +323,14 @@ struct encoder_model {
     struct ggml_tensor * e_ln_b;
 
     // decoder.positional_embedding
-    struct ggml_tensor * d_pe;
+    //struct ggml_tensor * d_pe;
 
     // decoder.token_embedding
-    struct ggml_tensor * d_te;
+    //struct ggml_tensor * d_te;
 
     // decoder.ln
-    struct ggml_tensor * d_ln_w;
-    struct ggml_tensor * d_ln_b;
+    //struct ggml_tensor * d_ln_w;
+    //struct ggml_tensor * d_ln_b;
 
     std::vector<encoder_layer> layers_encoder;
 
@@ -357,6 +357,20 @@ struct encoder_context {
     encoder_state * state = nullptr;
 
     std::string path_model; // populated by whisper_init_from_file()
+};
+
+
+struct encoder_full_params encoder_full_default_params() {
+    struct encoder_full_params result = {
+        /* offset_ms */      0,
+        /* duration_ms */    0,
+        /* single_segment */ false,
+        /* print_progress */ false,
+
+        /* speed_up */       false,
+        /* debug_mode */     false,
+        /* audio_ctx */      0,
+    };
 };
 
 
@@ -828,7 +842,6 @@ static bool encoder_model_load(struct encoder_model_loader * loader,
 
     return true;
 }
-
 }
 
 
@@ -852,6 +865,7 @@ struct encoder_context * encoder_init_no_state(struct encoder_model_loader * loa
 
     return ctx;
 }
+
 
 struct encoder_context * encoder_init_from_file_no_state(const char * path_model) {
 
@@ -891,3 +905,10 @@ struct encoder_context * encoder_init_from_file_no_state(const char * path_model
 
     return ctx;
 }
+
+
+int encoder_full_with_state(
+    struct encoder_context * ctx,
+    struct encoder_state * state,
+    
+)

@@ -34,6 +34,7 @@ int main(int argc, char** argv) {
     std::vector<float> pcmf32;               // mono-channel F32 PCM
     std::vector<std::vector<float>> pcmf32s; // stereo-channel F32 PCM
 
+    encoder_full_params eparams = encoder_full_default_params();
     // TODO: Use the context for something
     
     // Clean up
