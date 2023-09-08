@@ -40,6 +40,8 @@ int main(int argc, char** argv) {
 
     encoder_full_params eparams = encoder_full_default_params();
     // TODO: Use the context for something
+
+    int res = encoder_full_with_state(ctx, ctx->state, )
     
     // Clean up
     // TODO: Release the context if necessary

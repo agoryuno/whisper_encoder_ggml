@@ -1474,3 +1474,186 @@ int encoder_full_with_state(
     return 0;
 
 }
+
+
+struct encoder_state * encoder_init_state(encoder_context * ctx) {
+    fill_sin_cos_table();
+    encoder_state * state = new encoder_state;
+
+    const size_t scale = ctx->model.hparams.ftype ? 1 : 2;
+
+    if (!kv_cache_init(ctx->model.hparams, scale * MEM_REQ_KV_SELF.at(ctx->model.type), state->decoders[0].kv_self, ctx->itype, ctx->model.hparams.n_text_ctx)) {
+        log("%s: kv_cache_init() failed for self-attention cache\n", __func__);
+        delete state;
+        return nullptr;
+    }
+
+    {
+        const size_t memory_size = ggml_nbytes(state->decoders[0].kv_self.k) + ggml_nbytes(state->decoders[0].kv_self.v);
+        log("%s: kv self size  = %7.2f MB\n", __func__, memory_size / 1024.0 / 1024.0);
+    }
+
+    if (!kv_cache_init(ctx->model.hparams, scale * MEM_REQ_KV_CROSS.at(ctx->model.type), state->kv_cross, ctx->itype, ctx->model.hparams.n_audio_ctx)) {
+        log("%s: kv_cache_init() failed for cross-attention cache\n", __func__);
+        delete state;
+        return nullptr;
+    }
+
+    {
+        const size_t memory_size = ggml_nbytes(state->kv_cross.k) + ggml_nbytes(state->kv_cross.v);
+        log("%s: kv cross size = %7.2f MB\n", __func__, memory_size / 1024.0 / 1024.0);
+    }
+
+#ifdef WHISPER_USE_COREML
+    const auto path_coreml = whisper_get_coreml_path_encoder(ctx->path_model);
+
+    log("%s: loading Core ML model from '%s'\n", __func__, path_coreml.c_str());
+    log("%s: first run on a device may take a while ...\n", __func__);
+
+    state->ctx_coreml = whisper_coreml_init(path_coreml.c_str());
+    if (!state->ctx_coreml) {
+        log("%s: failed to load Core ML model from '%s'\n", __func__, path_coreml.c_str());
+#ifndef WHISPER_COREML_ALLOW_FALLBACK
+        return nullptr;
+#endif
+    } else {
+        log("%s: Core ML model loaded\n", __func__);
+    }
+#endif
+
+    state->logits.reserve(ctx->vocab.n_vocab * ctx->model.hparams.n_text_ctx);
+
+    state->logits_id.reserve(ctx->model.hparams.n_vocab);
+
+    // TAGS: WHISPER_DECODER_INIT
+    state->decoders[0].sequence.tokens.reserve(ctx->model.hparams.n_text_ctx);
+
+    state->decoders[0].probs.reserve(ctx->vocab.n_vocab);
+    state->decoders[0].logits.reserve(ctx->vocab.n_vocab);
+    state->decoders[0].logprobs.reserve(ctx->vocab.n_vocab);
+    state->buf_compute.resize(scale * std::max(MEM_REQ_ENCODE.at(ctx->model.type), MEM_REQ_DECODE.at(ctx->model.type)));
+
+    state->buf_scratch[0].resize(MEM_REQ_SCRATCH0.at(ctx->model.type));
+    state->buf_scratch[1].resize(MEM_REQ_SCRATCH1.at(ctx->model.type));
+    state->buf_scratch[2].resize(MEM_REQ_SCRATCH2.at(ctx->model.type));
+    state->buf_scratch[3].resize(MEM_REQ_SCRATCH3.at(ctx->model.type));
+
+    state->rng = std::mt19937(0);
+
+    return state;
+}
+
+int encoder_full(
+        struct encoder_context * ctx,
+    struct encoder_full_params   params,
+                   const float * samples,
+                           int   n_samples) {
+    return encoder_full_with_state(ctx, ctx->state, params, samples, n_samples);
+}
+
+int encoder_full_parallel(
+        struct encoder_context * ctx,
+        struct encoder_full_params params,
+        const float * samples,
+        int n_samples,
+        int n_processors) {
+    if (n_processors == 1) {
+        return encoder_full(ctx, params, samples, n_samples);
+    }
+    int ret = 0;
+
+    // prepare separate states for each thread
+    std::vector<encoder_state*> states;
+
+    const int offset_samples = (ENCODER_SAMPLE_RATE*params.offset_ms)/1000;
+    const int n_samples_per_processor = (n_samples - offset_samples)/n_processors;
+
+    // the calling thread will process the first chunk
+    // while the other threads will process the remaining chunks
+
+    std::vector<std::thread> workers(n_processors - 1);
+    for (int i = 0; i < n_processors - 1; ++i) {
+        // create a new state for each thread
+        states.push_back(encoder_init_state(ctx));
+
+        const int start_samples = offset_samples + (i + 1)*n_samples_per_processor;
+        const int n_samples_cur = (i == n_processors - 2) ? n_samples - start_samples : n_samples_per_processor;
+
+        auto params_cur = params;
+
+        params_cur.offset_ms = 0;
+        params_cur.print_progress = false;
+        params_cur.print_realtime = false;
+
+        params_cur.new_segment_callback = nullptr;
+        params_cur.new_segment_callback_user_data = nullptr;
+
+        params_cur.progress_callback = nullptr;
+        params_cur.progress_callback_user_data = nullptr;
+
+        workers[i] = std::thread(whisper_full_with_state, ctx, states[i], std::move(params_cur), samples + start_samples, n_samples_cur);
+    }
+
+    {
+        auto params_cur = params;
+
+        // We need to disable the print real-time for this one as well, otherwise it will show only for the first chunk.
+        params_cur.print_realtime = false;
+
+        // Run the first transformation using default state but only for the first chunk.
+        ret = whisper_full_with_state(ctx, ctx->state, std::move(params_cur), samples, offset_samples + n_samples_per_processor);
+    }
+
+    for (int i = 0; i < n_processors - 1; ++i) {
+        workers[i].join();
+    }
+
+    const int64_t offset_t = (int64_t) params.offset_ms/10.0;
+
+    // combine results into result_state->result_all from all other states
+    for (int i = 0; i < n_processors - 1; ++i) {
+        auto& results_i = states[i]->result_all;
+
+        for (auto& result : results_i) {
+            // correct the segment timestamp taking into account the offset
+            result.t0 += 100 * ((i + 1) * n_samples_per_processor) / WHISPER_SAMPLE_RATE + offset_t;
+            result.t1 += 100 * ((i + 1) * n_samples_per_processor) / WHISPER_SAMPLE_RATE + offset_t;
+
+            // make sure that segments are not overlapping
+            if (!ctx->state->result_all.empty()) {
+                result.t0 = std::max(result.t0, ctx->state->result_all.back().t1);
+            }
+
+            ctx->state->result_all.push_back(std::move(result));
+
+            // call the new_segment_callback for each segment
+            if (params.new_segment_callback) {
+                params.new_segment_callback(ctx, ctx->state, 1, params.new_segment_callback_user_data);
+            }
+        }
+
+        ctx->state->t_mel_us += states[i]->t_mel_us;
+
+        ctx->state->t_sample_us += states[i]->t_sample_us;
+        ctx->state->t_encode_us += states[i]->t_encode_us;
+        ctx->state->t_decode_us += states[i]->t_decode_us;
+
+        whisper_free_state(states[i]);
+    }
+
+    // average the timings
+    ctx->state->t_mel_us    /= n_processors;
+    ctx->state->t_sample_us /= n_processors;
+    ctx->state->t_encode_us /= n_processors;
+    ctx->state->t_decode_us /= n_processors;
+
+    // print information about the audio boundaries
+    log("\n");
+    log("%s: the audio has been split into %d chunks at the following times:\n", __func__, n_processors);
+    for (int i = 0; i < n_processors - 1; ++i) {
+        log("%s: split %d - %s\n", __func__, (i + 1), to_timestamp(100*((i + 1)*n_samples_per_processor)/WHISPER_SAMPLE_RATE + offset_t).c_str());
+    }
+    log("%s: the transcription quality may be degraded near these boundaries\n", __func__);
+
+    return ret;
+}

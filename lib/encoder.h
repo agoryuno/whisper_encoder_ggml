@@ -70,4 +70,19 @@ WHISPER_API struct encoder_full_params encoder_full_default_params();
 typedef void (*whisper_log_callback)(const char * line);
 WHISPER_API void whisper_set_log_callback(whisper_log_callback callback);
 
+int encoder_full_with_state(
+        struct encoder_context * ctx,
+          struct encoder_state * state,
+    struct encoder_full_params   params,
+                   const float * samples,
+                           int   n_samples);
+
+
+int encoder_full_parallel(
+        struct encoder_context * ctx,
+        struct encoder_full_params params,
+        const float * samples,
+        int n_samples,
+        int n_processors);
+
 #endif
