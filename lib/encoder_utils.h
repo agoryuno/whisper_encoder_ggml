@@ -1,11 +1,16 @@
 #include <vector>
 
+
 #include "../ggml.h"
 #include "encoder_state.h"
 
 static bool hann_window(int length, bool periodic, std::vector<float> & output);
 
+int encoder_n_len_from_state(struct encoder_state * state);
+
 typedef void (*encoder_log_callback)(const char * line);
+
+int encoder_n_audio_ctx(struct encoder_context * ctx);
 
 static std::vector<float> get_signal_energy(
                 const float * signal, 

@@ -82,6 +82,7 @@
         "queue": "cpp",
         "stack": "cpp",
         "any": "cpp",
-        "set": "cpp"
+        "set": "cpp",
+        "cassert": "cpp"
     }
 }

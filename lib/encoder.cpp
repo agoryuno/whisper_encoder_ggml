@@ -915,17 +915,17 @@ int encoder_full_with_state(
         }
     }
 
-    if (params.token_timestamps) {
+    /*if (params.token_timestamps) {
         state->t_beg    = 0;
         state->t_last   = 0;
         state->tid_last = 0;
         if (n_samples > 0) {
             state->energy = get_signal_energy(samples, n_samples, 32);
         }
-    }
+    }*/
 
     const int seek_start = params.offset_ms/10;
-    const int seek_end = params.duration_ms == 0 ? whisper_n_len_from_state(state) : seek_start + params.duration_ms/10;
+    const int seek_end = params.duration_ms == 0 ? encoder_n_len_from_state(state) : seek_start + params.duration_ms/10;
 
     // if length of spectrogram is less than 1.0s (100 frames), then return
     // basically don't process anything that is less than 1.0s
@@ -936,17 +936,17 @@ int encoder_full_with_state(
 
     // a set of temperatures to use
     // [ t0, t0 + delta, t0 + 2*delta, ..., < 1.0f + 1e-6f ]
-    std::vector<float> temperatures;
+    /* std::vector<float> temperatures;
     if (params.temperature_inc > 0.0f) {
         for (float t = params.temperature; t < 1.0f + 1e-6f; t += params.temperature_inc) {
             temperatures.push_back(t);
         }
     } else {
         temperatures.push_back(params.temperature);
-    }
+    }*/
 
     // initialize the decoders
-    int n_decoders = 1;
+    /*int n_decoders = 1;
 
     switch (params.strategy) {
         case WHISPER_SAMPLING_GREEDY:
@@ -1009,15 +1009,17 @@ int encoder_full_with_state(
             std::rotate(prompt_past.begin(), prompt_past.end() - params.prompt_n_tokens, prompt_past.end());
         }
     }
+    */
 
     // overwrite audio_ctx, max allowed is hparams.n_audio_ctx
-    if (params.audio_ctx > whisper_n_audio_ctx(ctx)) {
-        log("%s: audio_ctx is larger than the maximum allowed (%d > %d)\n", __func__, params.audio_ctx, whisper_n_audio_ctx(ctx));
+    if (params.audio_ctx > encoder_n_audio_ctx(ctx);) {
+        log("%s: audio_ctx is larger than the maximum allowed (%d > %d)\n", __func__, params.audio_ctx, encoder_n_audio_ctx(ctx););
         return -5;
     }
     state->exp_n_audio_ctx = params.audio_ctx;
 
     // these tokens determine the task that will be performed
+    /*
     std::vector<whisper_token> prompt_init = { whisper_token_sot(ctx) };
     if (whisper_is_multilingual(ctx)) {
         const int lang_id = whisper_lang_id(params.language);
@@ -1029,13 +1031,17 @@ int encoder_full_with_state(
             prompt_init.push_back(whisper_token_transcribe(ctx));
         }
     }
+    */
 
     int seek = seek_start;
 
+    /*
     std::vector<whisper_token> prompt;
     prompt.reserve(whisper_n_text_ctx(ctx));
+    */
 
     // beam-search helpers
+    /*
     struct kv_buf {
         std::vector<uint8_t> k;
         std::vector<uint8_t> v;
@@ -1053,27 +1059,30 @@ int encoder_full_with_state(
     };
 
     std::vector<beam_candidate> beam_candidates;
+    */
 
     // main loop
     while (true) {
-        if (params.progress_callback) {
+        /*if (params.progress_callback) {
             const int progress_cur = (100*(seek - seek_start))/(seek_end - seek_start);
 
             params.progress_callback(
                 ctx, ctx->state, progress_cur, params.progress_callback_user_data);
-        }
+        }*/
 
         // of only 1 second left, then stop
         if (seek + 100 >= seek_end) {
             break;
         }
 
+        /*
         if (params.encoder_begin_callback) {
             if (params.encoder_begin_callback(ctx, state, params.encoder_begin_callback_user_data) == false) {
                 log("%s: encoder_begin_callback returned false - aborting\n", __func__);
                 break;
             }
         }
+        */
 
         // encode audio features starting at offset seek
         if (!whisper_encode_internal(*ctx, *state, seek, params.n_threads)) {
@@ -1081,7 +1090,8 @@ int encoder_full_with_state(
             return -6;
         }
 
-        // if there is a very short audio segment left to process, we remove any past prompt since it tends
+        // if there is a very short audio segment left to process, we remove 
+        // any past prompt since it tends
         // to confuse the decoder and often make it repeat or hallucinate stuff
         if (seek > seek_start && seek + 500 >= seek_end) {
             prompt_past.clear();
