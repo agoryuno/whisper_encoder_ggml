@@ -1,4 +1,3 @@
-/build
 encoder.o
 lib/ggml.o
 tests/run-tests
@@ -8,3 +7,4 @@ ggml-model-small.bin
 ggml-model.bin
 test-audio.wav
 lib/ggml-alloc.o
+lib/encoder_utils.o
