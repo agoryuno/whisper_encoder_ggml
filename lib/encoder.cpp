@@ -918,7 +918,7 @@ int encoder_full_with_state(
     */
 
     // overwrite audio_ctx, max allowed is hparams.n_audio_ctx
-    if (params.audio_ctx > encoder_n_audio_ctx(ctx);) {
+    if (params.audio_ctx > encoder_n_audio_ctx(ctx)) {
         log("%s: audio_ctx is larger than the maximum allowed (%d > %d)\n", 
                 __func__, 
                 params.audio_ctx, 
