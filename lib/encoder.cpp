@@ -999,7 +999,8 @@ int encoder_full_with_state(
             return -6;
         }
 
-        
+    }        
 
     return 0;
+
 }

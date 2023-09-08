@@ -7,3 +7,4 @@ tests/test.log
 ggml-model-small.bin
 ggml-model.bin
 test-audio.wav
+lib/ggml-alloc.o

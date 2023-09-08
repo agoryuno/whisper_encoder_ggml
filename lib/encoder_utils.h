@@ -1,5 +1,5 @@
 #include <vector>
-
+#include <cstdarg>
 
 #include "ggml.h"
 #include "encoder_state.h"
@@ -35,6 +35,7 @@ int whisper_pcm_to_mel_with_state(
             int n_samples, 
             int n_threads);
 
+
 static bool log_mel_spectrogram(
               encoder_state & estate,
               const float * samples,
@@ -47,6 +48,7 @@ static bool log_mel_spectrogram(
               const encoder_filters & filters,
               const bool   debug,
               encoder_mel & mel);
+
 
 static bool encode_internal(
         encoder_context & wctx,

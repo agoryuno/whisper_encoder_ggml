@@ -9,6 +9,9 @@
 
 #define SIN_COS_N_COUNT ENCODER_N_FFT
 
+#include <map>
+#include <string>
+#include <random>
 
 struct encoder_filters {
     int32_t n_mel;
@@ -72,6 +75,7 @@ struct encoder_hparams {
     int32_t n_audio_head  = 6;
     int32_t n_audio_layer = 4;
     int32_t ftype         = 1;
+    float   eps           = 1e-5f;
 };
 
 
@@ -118,8 +122,6 @@ struct encoder_model {
     int n_loaded;
     std::map<std::string, struct ggml_tensor *> tensors;
 };
-
-
 
 
 struct encoder_mel {
