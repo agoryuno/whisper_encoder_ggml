@@ -755,6 +755,7 @@ static bool encode_internal(
     //}
 
     // pre-compute cross-attention memory
+    /*
     {
         struct ggml_cgraph gf = {};
 
@@ -802,6 +803,7 @@ static bool encode_internal(
         ggml_graph_compute_with_ctx(ctx0, &gf, n_threads);
         //ggml_graph_print(&gf);
     }
+    */
 
     ////////////////////////////////////////////////////////////////////////////
 
