@@ -48,10 +48,3 @@ static bool log_mel_spectrogram(
               const encoder_filters & filters,
               const bool   debug,
               encoder_mel & mel);
-
-
-static bool encode_internal(
-        encoder_context & wctx,
-          encoder_state & wstate,
-              const int   mel_offset,
-              const int   n_threads);
