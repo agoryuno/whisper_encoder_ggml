@@ -9,6 +9,7 @@
 
 #define SIN_COS_N_COUNT ENCODER_N_FFT
 
+
 struct encoder_filters {
     int32_t n_mel;
     int32_t n_fft;
@@ -16,26 +17,117 @@ struct encoder_filters {
     std::vector<float> data;
 };
 
+
+// audio encoding layer
+struct encoder_layer {
+    // encoder.blocks.*.attn_ln
+    struct ggml_tensor * attn_ln_0_w;
+    struct ggml_tensor * attn_ln_0_b;
+
+    // encoder.blocks.*.attn.out
+    struct ggml_tensor * attn_ln_1_w;
+    struct ggml_tensor * attn_ln_1_b;
+
+    // encoder.blocks.*.attn.query
+    struct ggml_tensor * attn_q_w;
+    struct ggml_tensor * attn_q_b;
+
+    // encoder.blocks.*.attn.key
+    struct ggml_tensor * attn_k_w;
+
+    // encoder.blocks.*.attn.value
+    struct ggml_tensor * attn_v_w;
+    struct ggml_tensor * attn_v_b;
+
+    // encoder.blocks.*.mlp_ln
+    struct ggml_tensor * mlp_ln_w;
+    struct ggml_tensor * mlp_ln_b;
+
+    // encoder.blocks.*.mlp.0
+    struct ggml_tensor * mlp_0_w;
+    struct ggml_tensor * mlp_0_b;
+
+    // encoder.blocks.*.mlp.2
+    struct ggml_tensor * mlp_1_w;
+    struct ggml_tensor * mlp_1_b;
+};
+
+
+// available whisper models
+enum e_model {
+    MODEL_UNKNOWN,
+    MODEL_TINY,
+    MODEL_BASE,
+    MODEL_SMALL,
+    MODEL_MEDIUM,
+    MODEL_LARGE,
+};
+
+
+// default hparams (Whisper tiny)
+struct encoder_hparams {
+    int32_t n_mels        = 80;
+    int32_t n_audio_ctx   = 1500;
+    int32_t n_audio_state = 384;
+    int32_t n_audio_head  = 6;
+    int32_t n_audio_layer = 4;
+    int32_t ftype         = 1;
+};
+
+
+struct encoder_model {
+    e_model type = MODEL_UNKNOWN;
+
+    encoder_hparams hparams;
+    encoder_filters filters;
+
+    // encoder.positional_embedding
+    struct ggml_tensor * e_pe;
+
+    // encoder.conv1
+    struct ggml_tensor * e_conv_1_w;
+    struct ggml_tensor * e_conv_1_b;
+
+    // encoder.conv2
+    struct ggml_tensor * e_conv_2_w;
+    struct ggml_tensor * e_conv_2_b;
+
+    // encoder.ln_post
+    struct ggml_tensor * e_ln_w;
+    struct ggml_tensor * e_ln_b;
+
+    // decoder.positional_embedding
+    //struct ggml_tensor * d_pe;
+
+    // decoder.token_embedding
+    //struct ggml_tensor * d_te;
+
+    // decoder.ln
+    //struct ggml_tensor * d_ln_w;
+    //struct ggml_tensor * d_ln_b;
+
+    std::vector<encoder_layer> layers_encoder;
+
+    // context
+    struct ggml_context * ctx;
+
+    // the model memory buffer is read-only and can be shared between processors
+    std::vector<uint8_t> * buf;
+
+    // tensors
+    int n_loaded;
+    std::map<std::string, struct ggml_tensor *> tensors;
+};
+
+
+
+
 struct encoder_mel {
     int n_len;
     int n_len_org;
     int n_mel;
 
     std::vector<float> data;
-};
-
-
-struct encoder_context {
-    int64_t t_load_us  = 0;
-    int64_t t_start_us = 0;
-
-    ggml_type wtype = ggml_type::GGML_TYPE_F16; // weight type (FP32 / FP16 / QX)
-    ggml_type itype = ggml_type::GGML_TYPE_F16; // intermediate type (FP32 or FP16)
-
-    encoder_model model;
-    encoder_state * state = nullptr;
-
-    std::string path_model; // populated by whisper_init_from_file()
 };
 
 
@@ -105,6 +197,20 @@ struct encoder_state {
         return 0;
 #endif
     }
+};
+
+
+struct encoder_context {
+    int64_t t_load_us  = 0;
+    int64_t t_start_us = 0;
+
+    ggml_type wtype = ggml_type::GGML_TYPE_F16; // weight type (FP32 / FP16 / QX)
+    ggml_type itype = ggml_type::GGML_TYPE_F16; // intermediate type (FP32 or FP16)
+
+    encoder_model model;
+    encoder_state * state = nullptr;
+
+    std::string path_model; // populated by whisper_init_from_file()
 };
 
 #endif // WHISPER_STATE_H

@@ -67,5 +67,7 @@ struct encoder_full_params {
 };
 
 WHISPER_API struct encoder_full_params encoder_full_default_params();
+typedef void (*whisper_log_callback)(const char * line);
+WHISPER_API void whisper_set_log_callback(whisper_log_callback callback);
 
 #endif

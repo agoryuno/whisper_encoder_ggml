@@ -7,7 +7,6 @@
 #include <string>
 #include <cstring>
 
-#include "ggml.h"
 #include "encoder_utils.h"
 
 
@@ -366,7 +365,7 @@ static bool encode_internal(
         encoder_context & wctx,
           encoder_state & wstate,
               const int   mel_offset,
-              const int   n_threads){
+              const int   n_threads) {
 
     const int64_t t_start_us = ggml_time_us();
 
