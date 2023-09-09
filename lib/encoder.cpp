@@ -12,6 +12,7 @@
 #include <vector>
 #include <regex>
 #include <random>
+#include <iostream>
 
 #include "ggml.h"
 #include "encoder.h"
@@ -279,6 +280,19 @@ static bool hann_window(int length, bool periodic, std::vector<float> & output) 
     return true;
 }
 
+// In FFT, we frequently use sine and cosine operations with the same values.
+// We can use precalculated values to speed up the process.
+static void fill_sin_cos_table() {
+    static bool is_filled = false;
+    if (is_filled) return;
+    for (int i = 0; i < SIN_COS_N_COUNT; i++) {
+        double theta = (2*M_PI*i)/SIN_COS_N_COUNT;
+        sin_vals[i] = sinf(theta);
+        cos_vals[i] = cosf(theta);
+    }
+    is_filled = true;
+}
+
 
 // naive Discrete Fourier Transform
 // input is real-valued
@@ -451,6 +465,10 @@ static bool log_mel_spectrogram(
               const encoder_filters & filters,
               const bool   debug,
               encoder_mel & mel) {
+
+    std::cout << "entered `log_mel_spectrogram()`" << std::endl;
+    std::cout << "Is mel initialized? : " << &mel << std::endl;
+
     const int64_t t_start_us = ggml_time_us();
 
     // Hanning window (Use cosf to eliminate difference)
@@ -458,6 +476,8 @@ static bool log_mel_spectrogram(
     // ref: https://github.com/openai/whisper/blob/main/whisper/audio.py#L147
     std::vector<float> hann;
     hann_window(frame_size, true, hann);
+
+    std::cout << "`hann_window()` computed" << std::endl;
 
 
     // Calculate the length of padding
@@ -469,20 +489,38 @@ static bool log_mel_spectrogram(
     samples_padded.resize(n_samples + stage_1_pad + stage_2_pad * 2);
     std::copy(samples, samples + n_samples, samples_padded.begin() + stage_2_pad);
 
+    std::cout << "vector initialized and data copied" << std::endl;
+
     // pad 30 seconds of zeros at the end of audio (480,000 samples) + reflective pad 200 samples at the end of audio
     std::fill(samples_padded.begin() + n_samples + stage_2_pad, samples_padded.begin() + n_samples + stage_1_pad + 2 * stage_2_pad, 0);
+
+    std::cout << "audio padded at end" << std::endl;
 
     // reflective pad 200 samples at the beginning of audio
     std::reverse_copy(samples + 1, samples + 1 + stage_2_pad, samples_padded.begin());
 
-    mel.n_mel     = n_mel;
+    std::cout << "audio padded at beginning" << std::endl;
+
+    std::cout << "mel.n_len: " << mel.n_len << std::endl;
+    std::cout << "mel.n_mel: " << mel.n_mel << std::endl;
+    
+    // Add more based on the properties of mel
+
+    mel.n_mel = n_mel;
+
+    std::cout << "`mel.n_mel` set" << std::endl;
+
     // https://github.com/pytorch/pytorch/blob/main/aten/src/ATen/native/SpectralOps.cpp#L936
     // Calculate number of frames + remove the last frame
     mel.n_len     = (samples_padded.size() - frame_size) / frame_step;
     // Calculate semi-padded sample length to ensure compatibility
     mel.n_len_org = 1 + (n_samples + stage_2_pad - frame_size) / frame_step;
+
+    std::cout << "resizing `mel.data`..." << std::endl;
+
     mel.data.resize(mel.n_mel * mel.n_len);
 
+    std::cout << "mel length calculated" << std::endl;
 
     {
         std::vector<std::thread> workers(n_threads - 1);
@@ -560,8 +598,6 @@ static std::vector<float> get_signal_energy(
 
 
 
-
-
 static void encoder_free_state(struct encoder_state * state)
 {
         delete state;
@@ -586,6 +622,11 @@ int whisper_pcm_to_mel_with_state(
             const float * samples, 
             int n_samples, 
             int n_threads) {
+
+    std::cout << "entered `whisper_pcm_to_mel_with_state`" << std::endl;
+    std::cout << "`&state` = " << &state << std::endl;
+    std::cout << "`state->mel` = " << state->mel.n_mel << std::endl;
+
     if (!log_mel_spectrogram(
                 *state, samples, 
                 n_samples, 
@@ -650,6 +691,7 @@ static bool encode_internal(
               const int   mel_offset,
               const int   n_threads) {
 
+     std::cout << "entered `encode_internal" << std::endl;
     const int64_t t_start_us = ggml_time_us();
 
     const auto & model   = wctx.model;
@@ -991,6 +1033,8 @@ static bool encode_internal(
 
         wstate.use_buf(ctx0, -1);
 
+       
+
         // run the computation
         {
             struct ggml_cgraph gf = {};
@@ -998,6 +1042,7 @@ static bool encode_internal(
             ggml_build_forward_expand  (&gf, cur);
             ggml_graph_compute_with_ctx(ctx0, &gf, n_threads);
 
+            // This should normally be disabled.
             //ggml_graph_print(&gf);
         }
     }
@@ -1023,18 +1068,18 @@ static bool encode_internal(
 #endif
 
     // cur
-    //{
-    //    printf("ne0 = %d\n", cur->ne[0]);
-    //    printf("ne1 = %d\n", cur->ne[1]);
-    //    for (int i = 0; i < 10; ++i) {
-    //        printf("%8.4f ", ((float *)(cur->data))[i]);
-    //    }
-    //    printf("... ");
-    //    for (int i = cur->ne[0] - 10; i < cur->ne[0]; ++i) {
-    //        printf("%8.4f ", ((float *)(cur->data))[i]);
-    //    }
-    //    printf("\n");
-    //}
+    {
+        printf("ne0 = %ld\n", cur->ne[0]);
+        printf("ne1 = %ld\n", cur->ne[1]);
+        for (int i = 0; i < 10; ++i) {
+            printf("%8.4f ", ((float *)(cur->data))[i]);
+        }
+        printf("... ");
+        for (int i = cur->ne[0] - 10; i < cur->ne[0]; ++i) {
+            printf("%8.4f ", ((float *)(cur->data))[i]);
+        }
+        printf("\n");
+    }
 
     // pre-compute cross-attention memory
     /*
@@ -1119,6 +1164,8 @@ static bool encode_internal(
 static bool encoder_model_load(struct encoder_model_loader * loader, 
                                encoder_context & wctx) {
     log("%s: loading model\n", __func__);
+
+    std::cout << "entered `encoder_model_load()" << std::endl;
 
     const int64_t t_start_us = ggml_time_us();
 
@@ -1549,6 +1596,9 @@ static bool encoder_model_load(struct encoder_model_loader * loader,
 
 
 struct encoder_context * encoder_init_no_state(struct encoder_model_loader * loader) {
+
+    std::cout << "entered `encoder_init_no_state()`" << std::endl;
+
     ggml_time_init();
 
     #ifdef DEBUG_MODE
@@ -1569,8 +1619,26 @@ struct encoder_context * encoder_init_no_state(struct encoder_model_loader * loa
     return ctx;
 }
 
+void encoder_free(struct encoder_context * ctx) {
+    if (ctx) {
+        if (ctx->model.ctx) {
+            ggml_free(ctx->model.ctx);
+        }
+        if (ctx->model.buf) {
+            delete ctx->model.buf;
+        }
+
+        encoder_free_state(ctx->state);
+
+        delete ctx;
+    }
+}
+
+
 
 struct encoder_context * encoder_init_from_file_no_state(const char * path_model) {
+
+    std::cout << "entered `encoder_init_from_file_no_state()`" << std::endl;
 
     log("%s: loading model from '%s'\n", __func__, path_model);
 
@@ -1606,8 +1674,94 @@ struct encoder_context * encoder_init_from_file_no_state(const char * path_model
         ctx->path_model = path_model;
     }
 
+    std::cout << "`ctx->state`:" << ctx->state << std::endl;
+
     return ctx;
 };
+
+struct encoder_state * encoder_init_state(encoder_context * ctx) {
+    fill_sin_cos_table();
+    encoder_state * state = new encoder_state;
+
+    const size_t scale = ctx->model.hparams.ftype ? 1 : 2;
+
+    /*
+    if (!kv_cache_init(ctx->model.hparams, scale * MEM_REQ_KV_SELF.at(ctx->model.type), state->decoders[0].kv_self, ctx->itype, ctx->model.hparams.n_text_ctx)) {
+        log("%s: kv_cache_init() failed for self-attention cache\n", __func__);
+        delete state;
+        return nullptr;
+    }
+
+    {
+        const size_t memory_size = ggml_nbytes(state->decoders[0].kv_self.k) + ggml_nbytes(state->decoders[0].kv_self.v);
+        log("%s: kv self size  = %7.2f MB\n", __func__, memory_size / 1024.0 / 1024.0);
+    }
+
+    if (!kv_cache_init(ctx->model.hparams, scale * MEM_REQ_KV_CROSS.at(ctx->model.type), state->kv_cross, ctx->itype, ctx->model.hparams.n_audio_ctx)) {
+        log("%s: kv_cache_init() failed for cross-attention cache\n", __func__);
+        delete state;
+        return nullptr;
+    }
+
+    {
+        const size_t memory_size = ggml_nbytes(state->kv_cross.k) + ggml_nbytes(state->kv_cross.v);
+        log("%s: kv cross size = %7.2f MB\n", __func__, memory_size / 1024.0 / 1024.0);
+    }
+    */
+#ifdef WHISPER_USE_COREML
+    const auto path_coreml = whisper_get_coreml_path_encoder(ctx->path_model);
+
+    log("%s: loading Core ML model from '%s'\n", __func__, path_coreml.c_str());
+    log("%s: first run on a device may take a while ...\n", __func__);
+
+    state->ctx_coreml = whisper_coreml_init(path_coreml.c_str());
+    if (!state->ctx_coreml) {
+        log("%s: failed to load Core ML model from '%s'\n", __func__, path_coreml.c_str());
+#ifndef WHISPER_COREML_ALLOW_FALLBACK
+        return nullptr;
+#endif
+    } else {
+        log("%s: Core ML model loaded\n", __func__);
+    }
+#endif
+    /*
+    state->logits.reserve(ctx->vocab.n_vocab * ctx->model.hparams.n_text_ctx);
+
+    state->logits_id.reserve(ctx->model.hparams.n_vocab);
+
+    // TAGS: WHISPER_DECODER_INIT
+    state->decoders[0].sequence.tokens.reserve(ctx->model.hparams.n_text_ctx);
+
+    state->decoders[0].probs.reserve(ctx->vocab.n_vocab);
+    state->decoders[0].logits.reserve(ctx->vocab.n_vocab);
+    state->decoders[0].logprobs.reserve(ctx->vocab.n_vocab);
+    */
+    state->buf_compute.resize(scale * std::max(MEM_REQ_ENCODE.at(ctx->model.type), MEM_REQ_DECODE.at(ctx->model.type)));
+
+    state->buf_scratch[0].resize(MEM_REQ_SCRATCH0.at(ctx->model.type));
+    state->buf_scratch[1].resize(MEM_REQ_SCRATCH1.at(ctx->model.type));
+    state->buf_scratch[2].resize(MEM_REQ_SCRATCH2.at(ctx->model.type));
+    state->buf_scratch[3].resize(MEM_REQ_SCRATCH3.at(ctx->model.type));
+
+    state->rng = std::mt19937(0);
+
+    return state;
+}
+
+struct encoder_context * encoder_init_from_file(const char * path_model) {
+    encoder_context * ctx = encoder_init_from_file_no_state(path_model);
+    if (!ctx) {
+        return nullptr;
+    }
+
+    ctx->state = encoder_init_state(ctx);
+    if (!ctx->state) {
+        encoder_free(ctx);
+        return nullptr;
+    }
+
+    return ctx;
+}
 
 
 int encoder_full_with_state(
@@ -1620,14 +1774,18 @@ int encoder_full_with_state(
     //auto & result_all = state->result_all;
 
     //result_all.clear();
+    std::cout << "entered `encoder_full_with_state()`" << std::endl;
 
     if (n_samples > 0) {
+        std::cout << "`n_samples` > 0" << std::endl;
         // compute log mel spectrogram
         if (params.speed_up) {
+            std::cout << "`params.speed_up` is true" << std::endl;
             // TODO: Replace PV with more advanced algorithm
             log("%s: failed to compute log mel spectrogram\n", __func__);
             return -1;
         } else {
+            std::cout << "`params.speed_up` is false" << std::endl;
             if (whisper_pcm_to_mel_with_state(
                             ctx, 
                             state, 
@@ -1648,6 +1806,7 @@ int encoder_full_with_state(
             state->energy = get_signal_energy(samples, n_samples, 32);
         }
     }*/
+    std::cout << "in `encoder_full_with_state()` (1)..." << std::endl;
 
     const int seek_start = params.offset_ms/10;
     const int seek_end = params.duration_ms == 0 ? encoder_n_len_from_state(state) : seek_start + params.duration_ms/10;
@@ -1656,9 +1815,10 @@ int encoder_full_with_state(
     // basically don't process anything that is less than 1.0s
     // see issue #39: https://github.com/ggerganov/whisper.cpp/issues/39
     if (seek_end < seek_start + (params.speed_up ? 50 : 100)) {
+        std::cout << "seek_end = " << seek_end << ", seek_start = " << seek_start << std::endl;
         return 0;
     }
-
+    
     // a set of temperatures to use
     // [ t0, t0 + delta, t0 + 2*delta, ..., < 1.0f + 1e-6f ]
     /* std::vector<float> temperatures;
@@ -1825,94 +1985,17 @@ int encoder_full_with_state(
 }
 
 
-// In FFT, we frequently use sine and cosine operations with the same values.
-// We can use precalculated values to speed up the process.
-static void fill_sin_cos_table() {
-    static bool is_filled = false;
-    if (is_filled) return;
-    for (int i = 0; i < SIN_COS_N_COUNT; i++) {
-        double theta = (2*M_PI*i)/SIN_COS_N_COUNT;
-        sin_vals[i] = sinf(theta);
-        cos_vals[i] = cosf(theta);
-    }
-    is_filled = true;
-}
 
 
-struct encoder_state * encoder_init_state(encoder_context * ctx) {
-    fill_sin_cos_table();
-    encoder_state * state = new encoder_state;
 
-    const size_t scale = ctx->model.hparams.ftype ? 1 : 2;
 
-    /*
-    if (!kv_cache_init(ctx->model.hparams, scale * MEM_REQ_KV_SELF.at(ctx->model.type), state->decoders[0].kv_self, ctx->itype, ctx->model.hparams.n_text_ctx)) {
-        log("%s: kv_cache_init() failed for self-attention cache\n", __func__);
-        delete state;
-        return nullptr;
-    }
-
-    {
-        const size_t memory_size = ggml_nbytes(state->decoders[0].kv_self.k) + ggml_nbytes(state->decoders[0].kv_self.v);
-        log("%s: kv self size  = %7.2f MB\n", __func__, memory_size / 1024.0 / 1024.0);
-    }
-
-    if (!kv_cache_init(ctx->model.hparams, scale * MEM_REQ_KV_CROSS.at(ctx->model.type), state->kv_cross, ctx->itype, ctx->model.hparams.n_audio_ctx)) {
-        log("%s: kv_cache_init() failed for cross-attention cache\n", __func__);
-        delete state;
-        return nullptr;
-    }
-
-    {
-        const size_t memory_size = ggml_nbytes(state->kv_cross.k) + ggml_nbytes(state->kv_cross.v);
-        log("%s: kv cross size = %7.2f MB\n", __func__, memory_size / 1024.0 / 1024.0);
-    }
-    */
-#ifdef WHISPER_USE_COREML
-    const auto path_coreml = whisper_get_coreml_path_encoder(ctx->path_model);
-
-    log("%s: loading Core ML model from '%s'\n", __func__, path_coreml.c_str());
-    log("%s: first run on a device may take a while ...\n", __func__);
-
-    state->ctx_coreml = whisper_coreml_init(path_coreml.c_str());
-    if (!state->ctx_coreml) {
-        log("%s: failed to load Core ML model from '%s'\n", __func__, path_coreml.c_str());
-#ifndef WHISPER_COREML_ALLOW_FALLBACK
-        return nullptr;
-#endif
-    } else {
-        log("%s: Core ML model loaded\n", __func__);
-    }
-#endif
-    /*
-    state->logits.reserve(ctx->vocab.n_vocab * ctx->model.hparams.n_text_ctx);
-
-    state->logits_id.reserve(ctx->model.hparams.n_vocab);
-
-    // TAGS: WHISPER_DECODER_INIT
-    state->decoders[0].sequence.tokens.reserve(ctx->model.hparams.n_text_ctx);
-
-    state->decoders[0].probs.reserve(ctx->vocab.n_vocab);
-    state->decoders[0].logits.reserve(ctx->vocab.n_vocab);
-    state->decoders[0].logprobs.reserve(ctx->vocab.n_vocab);
-    */
-    state->buf_compute.resize(scale * std::max(MEM_REQ_ENCODE.at(ctx->model.type), MEM_REQ_DECODE.at(ctx->model.type)));
-
-    state->buf_scratch[0].resize(MEM_REQ_SCRATCH0.at(ctx->model.type));
-    state->buf_scratch[1].resize(MEM_REQ_SCRATCH1.at(ctx->model.type));
-    state->buf_scratch[2].resize(MEM_REQ_SCRATCH2.at(ctx->model.type));
-    state->buf_scratch[3].resize(MEM_REQ_SCRATCH3.at(ctx->model.type));
-
-    state->rng = std::mt19937(0);
-
-    return state;
-}
 
 int encoder_full(
         struct encoder_context * ctx,
     struct encoder_full_params   params,
                    const float * samples,
                            int   n_samples) {
+    std::cout << "entered `encoder_full()`" << std::endl;
     return encoder_full_with_state(ctx, ctx->state, params, samples, n_samples);
 }
 
@@ -1922,6 +2005,9 @@ int encoder_full_parallel(
         const float * samples,
         int n_samples,
         int n_processors) {
+
+    std::cout << "entered `encoder_full_paralle()" << std::endl;
+
     if (n_processors == 1) {
         return encoder_full(ctx, params, samples, n_samples);
     }

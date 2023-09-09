@@ -88,4 +88,6 @@ int encoder_full_parallel(
         int n_samples,
         int n_processors);
 
+struct encoder_context * encoder_init_from_file(const char * path_model);
+
 #endif
