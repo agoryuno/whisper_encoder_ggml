@@ -26,6 +26,8 @@
 #include <stdarg.h>
 #include <signal.h>
 
+// This should be removed
+
 #ifdef GGML_USE_METAL
 #include <unistd.h>
 #endif
@@ -4750,6 +4752,7 @@ static struct ggml_tensor * ggml_new_tensor_impl(
         const int64_t       * ne,
         struct ggml_tensor  * view_src,
         size_t                view_offs) {
+    printf('entered `ggml_new_tensor_impl()`\n');
 
     assert(n_dims >= 1 && n_dims <= GGML_MAX_DIMS);
 
@@ -4843,6 +4846,7 @@ struct ggml_tensor * ggml_new_tensor(
         enum   ggml_type      type,
         int                   n_dims,
         const int64_t       * ne) {
+    printf("entered `ggml_new_tensor()`\n");
     return ggml_new_tensor_impl(ctx, type, n_dims, ne, NULL, 0);
 }
 
@@ -4908,6 +4912,7 @@ struct ggml_tensor * ggml_new_f32(struct ggml_context * ctx, float value) {
 }
 
 struct ggml_tensor * ggml_dup_tensor(struct ggml_context * ctx, const struct ggml_tensor * src) {
+    printf("entered `ggml_dup_tensor()`\n");
     return ggml_new_tensor(ctx, src->type, src->n_dims, src->ne);
 }
 
@@ -5211,6 +5216,7 @@ struct ggml_tensor * ggml_format_name(struct ggml_tensor * tensor, const char * 
 struct ggml_tensor * ggml_view_tensor(
         struct ggml_context * ctx,
         struct ggml_tensor  * src) {
+    printf ("entered `ggml_view_tensor()`\n");
     struct ggml_tensor * result = ggml_new_tensor_impl(ctx, src->type, src->n_dims, src->ne, src, 0);
     ggml_format_name(result, "%s (view)", src->name);
 
@@ -5284,8 +5290,9 @@ static struct ggml_tensor * ggml_add_impl(
         bool inplace) {
     // TODO: support less-strict constraint
     //       GGML_ASSERT(ggml_can_repeat(b, a));
+    printf("entered `ggml_add_impl()`\n");
     GGML_ASSERT(ggml_can_repeat_rows(b, a));
-
+    printf("ggml_add_impl() [1]\n");
     bool is_node = false;
 
     if (!inplace && (a->grad || b->grad)) {
@@ -5293,14 +5300,22 @@ static struct ggml_tensor * ggml_add_impl(
         GGML_ASSERT(ggml_are_same_shape(a, b));
         is_node = true;
     }
-
+    printf("ggml_add_impl() [2]\n");
     struct ggml_tensor * result = inplace ? ggml_view_tensor(ctx, a) : ggml_dup_tensor(ctx, a);
-
+    
+    printf("ggml_add_impl() [3]\n");
+    
     result->op   = GGML_OP_ADD;
+    
+    printf("ggml_add_impl() [4]\n");
+
     result->grad = is_node ? ggml_dup_tensor(ctx, result) : NULL;
+    
+    printf("ggml_add_impl() [5]\n");
+
     result->src[0] = a;
     result->src[1] = b;
-
+    printf("ggml_add_impl() [end]\n");
     return result;
 }
 
@@ -5308,6 +5323,7 @@ struct ggml_tensor * ggml_add(
         struct ggml_context * ctx,
         struct ggml_tensor * a,
         struct ggml_tensor * b) {
+    printf("entered `ggml_add()`\n");
     return ggml_add_impl(ctx, a, b, false);
 }
 

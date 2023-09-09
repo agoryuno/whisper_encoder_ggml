@@ -716,6 +716,8 @@ static bool encode_internal(
 
     wstate.use_buf(ctx0, 0);
 
+    std::cout << "`encode_internal()` [1]" << std::endl;
+
     struct ggml_tensor * mel = ggml_new_tensor_2d(ctx0, GGML_TYPE_F32, 2*n_ctx, n_mels);
     assert(mel->type == GGML_TYPE_F32);
     {
@@ -733,6 +735,8 @@ static bool encode_internal(
     }
 
     struct ggml_tensor * cur;
+
+    
 
 #ifndef WHISPER_USE_COREML
     const bool use_coreml = false;
@@ -792,13 +796,15 @@ static bool encode_internal(
         const size_t e_pe_offset = model.e_pe->ne[0]*ggml_element_size(model.e_pe)*n_ctx*iter;
 
         struct ggml_tensor * e_pe = ggml_view_2d(ctx0, model.e_pe, model.e_pe->ne[0], n_ctx, e_pe_stride, e_pe_offset);
-
+std::cout << "`encode_internal()` [2]" << std::endl;
         cur = ggml_add(ctx0, e_pe, ggml_transpose(ctx0, cur));
-
+std::cout << "`encode_internal()` [3]" << std::endl;
         // ===================================================================
 
         // original:
         //cur = ggml_add(ctx0, model.e_pe, ggml_transpose(ctx0, cur));
+
+        
 
         struct ggml_tensor * inpL = cur;
 
@@ -855,6 +861,8 @@ static bool encode_internal(
                 // ------
 
                 wstate.use_buf(ctx0, 0);
+
+
 
 #ifdef WHISPER_USE_FLASH_ATTN
                 struct ggml_tensor * Q =
