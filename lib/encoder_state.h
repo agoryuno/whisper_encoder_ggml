@@ -12,6 +12,7 @@
 #include <map>
 #include <string>
 #include <random>
+#include "ggml.h"
 
 struct encoder_filters {
     int32_t n_mel;

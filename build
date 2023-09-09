@@ -1,6 +1,6 @@
 #!/bin/sh
 
 gcc -I./lib -O3 -DNDEBUG -std=c11 -fPIC -D_XOPEN_SOURCE=600 -D_GNU_SOURCE -pthread -mavx -mf16c -msse3 -msse -c lib/ggml.c -o lib/ggml.o
-g++ -I./lib -O3 -DNDEBUG -std=c++11 -fPIC -D_XOPEN_SOURCE=600 -D_GNU_SOURCE -pthread -mavx -mf16c -msse3 -msse -c lib/encoder_utils.cpp -o lib/encoder_utils.o
+#g++ -I./lib -O3 -DNDEBUG -std=c++11 -fPIC -D_XOPEN_SOURCE=600 -D_GNU_SOURCE -pthread -mavx -mf16c -msse3 -msse -c lib/encoder_utils.cpp -o lib/encoder_utils.o
 g++ -I./lib -O3 -DNDEBUG -std=c++11 -fPIC -D_XOPEN_SOURCE=600 -D_GNU_SOURCE -pthread -mavx -mf16c -msse3 -msse -c lib/encoder.cpp -o lib/encoder.o
-g++ -I./lib -Wfatal-errors lib/common/common.cpp main.cpp lib/ggml.o lib/encoder_utils.o lib/encoder.o -o encoder_cli
+g++ -I./lib -Wfatal-errors lib/common/common.cpp main.cpp lib/ggml.o lib/encoder.o -o encoder_cli

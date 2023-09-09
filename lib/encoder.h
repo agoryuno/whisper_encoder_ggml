@@ -5,6 +5,8 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+#include "encoder_state.h"
+
 #ifdef WHISPER_SHARED
 #    ifdef _WIN32
 #        ifdef WHISPER_BUILD
@@ -67,8 +69,9 @@ struct encoder_full_params {
 };
 
 WHISPER_API struct encoder_full_params encoder_full_default_params();
-typedef void (*whisper_log_callback)(const char * line);
-WHISPER_API void whisper_set_log_callback(whisper_log_callback callback);
+
+typedef void (*encoder_log_callback)(const char * line);
+WHISPER_API void encoder_set_log_callback(encoder_log_callback callback);
 
 int encoder_full_with_state(
         struct encoder_context * ctx,
