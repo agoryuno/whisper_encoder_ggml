@@ -4702,6 +4702,7 @@ static void ggml_scratch_load(struct ggml_context * ctx) {
 ////////////////////////////////////////////////////////////////////////////////
 
 static struct ggml_object * ggml_new_object(struct ggml_context * ctx, enum ggml_object_type type, size_t size) {
+    printf("entered `ggml_new_object()`\n");
     // always insert objects at the end of the context's memory pool
     struct ggml_object * obj_cur = ctx->objects_end;
 
@@ -4752,7 +4753,7 @@ static struct ggml_tensor * ggml_new_tensor_impl(
         const int64_t       * ne,
         struct ggml_tensor  * view_src,
         size_t                view_offs) {
-    printf('entered `ggml_new_tensor_impl()`\n');
+    printf("entered `ggml_new_tensor_impl()`\n");
 
     assert(n_dims >= 1 && n_dims <= GGML_MAX_DIMS);
 
@@ -4761,19 +4762,22 @@ static struct ggml_tensor * ggml_new_tensor_impl(
         view_offs += view_src->view_offs;
         view_src   = view_src->view_src;
     }
-
+    printf("ggml_new_tensor_impl() [1]\n");
     size_t data_size = ggml_type_size(type)*(ne[0]/ggml_blck_size(type));
     for (int i = 1; i < n_dims; i++) {
         data_size *= ne[i];
     }
 
+    printf("ggml_new_tensor_impl() [2]\n");
     GGML_ASSERT(view_src == NULL || data_size + view_offs <= ggml_nbytes(view_src));
 
+    printf("ggml_new_tensor_impl() [3]\n");
     void * data = view_src != NULL ? view_src->data : NULL;
     if (data != NULL) {
         data = (char *) data + view_offs;
     }
 
+    printf("ggml_new_tensor_impl() [4]\n");
     size_t obj_alloc_size = 0;
 
     if (view_src == NULL && ctx->no_alloc == false) {
@@ -4795,8 +4799,10 @@ static struct ggml_tensor * ggml_new_tensor_impl(
         }
     }
 
+    printf("ggml_new_tensor_impl() [5]\n");
     struct ggml_object * const obj_new = ggml_new_object(ctx, GGML_OBJECT_TENSOR, GGML_TENSOR_SIZE + obj_alloc_size);
 
+    printf("ggml_new_tensor_impl() [6]\n");
     // TODO: for recoverable errors, we would need to free the data allocated from the scratch buffer here
 
     struct ggml_tensor * const result = (struct ggml_tensor *)((char *)ctx->mem_buffer + obj_new->offs);
