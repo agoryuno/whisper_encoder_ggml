@@ -8,3 +8,4 @@ ggml-model.bin
 test-audio.wav
 lib/ggml-alloc.o
 lib/encoder_utils.o
+encoder-out.txt

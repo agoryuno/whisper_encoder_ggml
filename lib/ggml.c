@@ -4574,6 +4574,8 @@ struct ggml_context * ggml_init(struct ggml_init_params params) {
     }
 
     const size_t mem_size = params.mem_buffer ? params.mem_size : GGML_PAD(params.mem_size, GGML_MEM_ALIGN);
+    
+    printf("ggml_init(): mem_size =  %zu\n", mem_size);
 
     *ctx = (struct ggml_context) {
         /*.mem_size           =*/ mem_size,
@@ -4716,6 +4718,8 @@ static struct ggml_object * ggml_new_object(struct ggml_context * ctx, enum ggml
     char * const mem_buffer = ctx->mem_buffer;
     struct ggml_object * const obj_new = (struct ggml_object *)(mem_buffer + cur_end);
 
+    printf("current memory required = %zu\n", cur_end+size_needed+GGML_OBJECT_SIZE);
+
     if (cur_end + size_needed + GGML_OBJECT_SIZE > ctx->mem_size) {
         GGML_PRINT("%s: not enough space in the context's memory pool (needed %zu, available %zu)\n",
                 __func__, cur_end + size_needed, ctx->mem_size);
@@ -4762,22 +4766,18 @@ static struct ggml_tensor * ggml_new_tensor_impl(
         view_offs += view_src->view_offs;
         view_src   = view_src->view_src;
     }
-    printf("ggml_new_tensor_impl() [1]\n");
     size_t data_size = ggml_type_size(type)*(ne[0]/ggml_blck_size(type));
     for (int i = 1; i < n_dims; i++) {
         data_size *= ne[i];
     }
 
-    printf("ggml_new_tensor_impl() [2]\n");
     GGML_ASSERT(view_src == NULL || data_size + view_offs <= ggml_nbytes(view_src));
 
-    printf("ggml_new_tensor_impl() [3]\n");
     void * data = view_src != NULL ? view_src->data : NULL;
     if (data != NULL) {
         data = (char *) data + view_offs;
     }
 
-    printf("ggml_new_tensor_impl() [4]\n");
     size_t obj_alloc_size = 0;
 
     if (view_src == NULL && ctx->no_alloc == false) {
@@ -4799,10 +4799,8 @@ static struct ggml_tensor * ggml_new_tensor_impl(
         }
     }
 
-    printf("ggml_new_tensor_impl() [5]\n");
     struct ggml_object * const obj_new = ggml_new_object(ctx, GGML_OBJECT_TENSOR, GGML_TENSOR_SIZE + obj_alloc_size);
 
-    printf("ggml_new_tensor_impl() [6]\n");
     // TODO: for recoverable errors, we would need to free the data allocated from the scratch buffer here
 
     struct ggml_tensor * const result = (struct ggml_tensor *)((char *)ctx->mem_buffer + obj_new->offs);

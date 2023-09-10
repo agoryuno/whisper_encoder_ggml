@@ -691,7 +691,7 @@ static bool encode_internal(
               const int   mel_offset,
               const int   n_threads) {
 
-     std::cout << "entered `encode_internal" << std::endl;
+     std::cout << "entered `encode_internal`" << std::endl;
     const int64_t t_start_us = ggml_time_us();
 
     const auto & model   = wctx.model;
@@ -716,7 +716,6 @@ static bool encode_internal(
 
     wstate.use_buf(ctx0, 0);
 
-    std::cout << "`encode_internal()` [1]" << std::endl;
 
     struct ggml_tensor * mel = ggml_new_tensor_2d(ctx0, GGML_TYPE_F32, 2*n_ctx, n_mels);
     assert(mel->type == GGML_TYPE_F32);
@@ -796,9 +795,7 @@ static bool encode_internal(
         const size_t e_pe_offset = model.e_pe->ne[0]*ggml_element_size(model.e_pe)*n_ctx*iter;
 
         struct ggml_tensor * e_pe = ggml_view_2d(ctx0, model.e_pe, model.e_pe->ne[0], n_ctx, e_pe_stride, e_pe_offset);
-std::cout << "`encode_internal()` [2]" << std::endl;
         cur = ggml_add(ctx0, e_pe, ggml_transpose(ctx0, cur));
-std::cout << "`encode_internal()` [3]" << std::endl;
         // ===================================================================
 
         // original:
@@ -975,7 +972,7 @@ std::cout << "`encode_internal()` [3]" << std::endl;
                                 cur),
                             ggml_repeat(ctx0, layer.mlp_ln_b, cur));
                 }
-
+printf("`encode_internal()` [1]");
 #ifdef WHISPER_USE_FLASH_FF
                 wstate.use_buf(ctx0, 0);
 
@@ -1173,7 +1170,7 @@ static bool encoder_model_load(struct encoder_model_loader * loader,
                                encoder_context & wctx) {
     log("%s: loading model\n", __func__);
 
-    std::cout << "entered `encoder_model_load()" << std::endl;
+    std::cout << "entered `encoder_model_load()`" << std::endl;
 
     const int64_t t_start_us = ggml_time_us();
 
@@ -1202,6 +1199,7 @@ static bool encoder_model_load(struct encoder_model_loader * loader,
         read_safe(loader, hparams.n_mels);
         read_safe(loader, hparams.ftype);
 
+        printf("hprams.n_audio_layer = %d\n", hparams.n_audio_layer);
         if (hparams.n_audio_layer == 4) {
             model.type = e_model::MODEL_TINY;
         }
@@ -1249,6 +1247,7 @@ static bool encoder_model_load(struct encoder_model_loader * loader,
         log("%s: ftype         = %d\n", __func__, model.hparams.ftype);
         log("%s: qntvr         = %d\n", __func__, qntvr);
         log("%s: type          = %d\n", __func__, model.type);
+        log("%s: wctx.wtype    = %d\n", __func__, wctx.wtype);
 
         // print memory requirements
         {
@@ -1410,12 +1409,15 @@ static bool encoder_model_load(struct encoder_model_loader * loader,
 
             #ifdef DEBUG_MODE
                 printf("creating ggml tensors for first Conv layer\n");
+                printf("n_mels = %d\n", n_mels);
+                printf("n_audio_state = %d\n", n_audio_state);
             #endif
             model.e_conv_1_w = ggml_new_tensor_3d(ctx, vtype,         3, n_mels, n_audio_state);
             model.e_conv_1_b = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, 1, n_audio_state);
 
             #ifdef DEBUG_MODE
                 printf("creating ggml tensors for second Conv layer\n");
+                printf("n_audio_state = %d\n", n_audio_state);
             #endif
             model.e_conv_2_w = ggml_new_tensor_3d(ctx, vtype,         3, n_audio_state, n_audio_state);
             model.e_conv_2_b = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, 1, n_audio_state);
@@ -1966,7 +1968,7 @@ int encoder_full_with_state(
                 ctx, ctx->state, progress_cur, params.progress_callback_user_data);
         }*/
 
-        // of only 1 second left, then stop
+        // if only 1 second left, then stop
         if (seek + 100 >= seek_end) {
             break;
         }
@@ -1993,11 +1995,6 @@ int encoder_full_with_state(
 }
 
 
-
-
-
-
-
 int encoder_full(
         struct encoder_context * ctx,
     struct encoder_full_params   params,
@@ -2006,6 +2003,7 @@ int encoder_full(
     std::cout << "entered `encoder_full()`" << std::endl;
     return encoder_full_with_state(ctx, ctx->state, params, samples, n_samples);
 }
+
 
 int encoder_full_parallel(
         struct encoder_context * ctx,

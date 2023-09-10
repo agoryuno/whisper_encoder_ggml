@@ -6,6 +6,9 @@
 #include "lib/encoder.h"
 
 int main(int argc, char** argv) {
+
+    setbuf(stdout, NULL);
+    
     if(argc < 3) {
         std::cerr << "Usage: " << argv[0] << " <model_path> <input_wav_file> [optional_arg]" << std::endl;
         return 1;
