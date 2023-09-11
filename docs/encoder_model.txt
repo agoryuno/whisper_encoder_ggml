@@ -1,0 +1,43 @@
+struct encoder_model {
+    e_model type = MODEL_UNKNOWN;
+
+    encoder_hparams hparams;
+    encoder_filters filters;
+
+    // encoder.positional_embedding
+    struct ggml_tensor * e_pe;
+
+    // encoder.conv1
+    struct ggml_tensor * e_conv_1_w;
+    struct ggml_tensor * e_conv_1_b;
+
+    // encoder.conv2
+    struct ggml_tensor * e_conv_2_w;
+    struct ggml_tensor * e_conv_2_b;
+
+    // encoder.ln_post
+    struct ggml_tensor * e_ln_w;
+    struct ggml_tensor * e_ln_b;
+
+    // decoder.positional_embedding
+    //struct ggml_tensor * d_pe;
+
+    // decoder.token_embedding
+    //struct ggml_tensor * d_te;
+
+    // decoder.ln
+    //struct ggml_tensor * d_ln_w;
+    //struct ggml_tensor * d_ln_b;
+
+    std::vector<encoder_layer> layers_encoder;
+
+    // context
+    struct ggml_context * ctx;
+
+    // the model memory buffer is read-only and can be shared between processors
+    std::vector<uint8_t> * buf;
+
+    // tensors
+    int n_loaded;
+    std::map<std::string, struct ggml_tensor *> tensors;
+};

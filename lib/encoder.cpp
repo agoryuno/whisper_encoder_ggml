@@ -796,7 +796,7 @@ printf("`encode_internal()` [1]\n");
         const size_t e_pe_offset = model.e_pe->ne[0]*ggml_element_size(model.e_pe)*n_ctx*iter;
 
         struct ggml_tensor * e_pe = ggml_view_2d(ctx0, model.e_pe, model.e_pe->ne[0], n_ctx, e_pe_stride, e_pe_offset);
-printf("`encode_internal()` [failure on next line\n");        
+printf("`encode_internal()` [failure on next line]\n");        
         cur = ggml_add(ctx0, e_pe, ggml_transpose(ctx0, cur));
         // ===================================================================
 
