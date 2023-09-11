@@ -9,6 +9,9 @@
 
 #define SIN_COS_N_COUNT ENCODER_N_FFT
 
+#define WHISPER_USE_SCRATCH
+#define WHISPER_MAX_SCRATCH_BUFFERS 16
+
 #include <map>
 #include <string>
 #include <random>
@@ -146,7 +149,12 @@ struct encoder_state {
     int32_t n_fail_p = 0; // number of logprob threshold failures
     int32_t n_fail_h = 0; // number of entropy threshold failures
 
+    // cross-attention KV cache for the decoders
+    // shared between all decoders
+    //whisper_kv_cache kv_cross;
     encoder_mel mel;
+
+    //whisper_decoder decoders[WHISPER_MAX_DECODERS] = {};
 
     // memory buffers used by encode contexts
     std::vector<uint8_t> buf_compute;
@@ -155,22 +163,38 @@ struct encoder_state {
     int    buf_last = 0;
     size_t buf_max_size[ENCODER_MAX_SCRATCH_BUFFERS] = { 0 };
 
+    // decode output (2-dimensional array: [n_tokens][n_vocab])
+    //std::vector<float> logits;
+
     // std::vector<whisper_segment> result_all;
     // std::vector<whisper_token>   prompt_past;
 
+    // work container used to avoid memory allocations
+    //std::vector<std::pair<double, whisper_vocab::id>> logits_id;
+
     mutable std::mt19937 rng; // used for sampling at t > 0.0
 
-    int lang_id = 0; // english by default
+    //int lang_id = 0; // english by default
 
     std::string path_model; // populated by encoder_init_from_file()
+#ifdef WHISPER_USE_COREML
+    whisper_coreml_context * ctx_coreml = nullptr;
+#endif
 
+#ifdef WHISPER_USE_OPENVINO
+    whisper_openvino_context * ctx_openvino = nullptr;
+#endif
+
+    // [EXPERIMENTAL] token-level timestamps data
+    //int64_t t_beg = 0;
+    //int64_t t_last = 0;
+    //whisper_token tid_last;
     std::vector<float> energy; // PCM signal energy
 
     // [EXPERIMENTAL] speed-up techniques
     int32_t exp_n_audio_ctx = 0; // 0 - use default
 
     void use_buf(struct ggml_context * ctx, int i) {
-
 #if defined(WHISPER_USE_SCRATCH)
         size_t last_size = 0;
 
