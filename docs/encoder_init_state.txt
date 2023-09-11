@@ -1,0 +1,68 @@
+struct encoder_state * encoder_init_state(encoder_context * ctx) {
+    fill_sin_cos_table();
+    encoder_state * state = new encoder_state;
+
+    const size_t scale = ctx->model.hparams.ftype ? 1 : 2;
+
+    /*
+    if (!kv_cache_init(ctx->model.hparams, scale * MEM_REQ_KV_SELF.at(ctx->model.type), state->decoders[0].kv_self, ctx->itype, ctx->model.hparams.n_text_ctx)) {
+        log("%s: kv_cache_init() failed for self-attention cache\n", __func__);
+        delete state;
+        return nullptr;
+    }
+
+    {
+        const size_t memory_size = ggml_nbytes(state->decoders[0].kv_self.k) + ggml_nbytes(state->decoders[0].kv_self.v);
+        log("%s: kv self size  = %7.2f MB\n", __func__, memory_size / 1024.0 / 1024.0);
+    }
+
+    if (!kv_cache_init(ctx->model.hparams, scale * MEM_REQ_KV_CROSS.at(ctx->model.type), state->kv_cross, ctx->itype, ctx->model.hparams.n_audio_ctx)) {
+        log("%s: kv_cache_init() failed for cross-attention cache\n", __func__);
+        delete state;
+        return nullptr;
+    }
+
+    {
+        const size_t memory_size = ggml_nbytes(state->kv_cross.k) + ggml_nbytes(state->kv_cross.v);
+        log("%s: kv cross size = %7.2f MB\n", __func__, memory_size / 1024.0 / 1024.0);
+    }
+    */
+#ifdef WHISPER_USE_COREML
+    const auto path_coreml = whisper_get_coreml_path_encoder(ctx->path_model);
+
+    log("%s: loading Core ML model from '%s'\n", __func__, path_coreml.c_str());
+    log("%s: first run on a device may take a while ...\n", __func__);
+
+    state->ctx_coreml = whisper_coreml_init(path_coreml.c_str());
+    if (!state->ctx_coreml) {
+        log("%s: failed to load Core ML model from '%s'\n", __func__, path_coreml.c_str());
+#ifndef WHISPER_COREML_ALLOW_FALLBACK
+        return nullptr;
+#endif
+    } else {
+        log("%s: Core ML model loaded\n", __func__);
+    }
+#endif
+    /*
+    state->logits.reserve(ctx->vocab.n_vocab * ctx->model.hparams.n_text_ctx);
+
+    state->logits_id.reserve(ctx->model.hparams.n_vocab);
+
+    // TAGS: WHISPER_DECODER_INIT
+    state->decoders[0].sequence.tokens.reserve(ctx->model.hparams.n_text_ctx);
+
+    state->decoders[0].probs.reserve(ctx->vocab.n_vocab);
+    state->decoders[0].logits.reserve(ctx->vocab.n_vocab);
+    state->decoders[0].logprobs.reserve(ctx->vocab.n_vocab);
+    */
+    state->buf_compute.resize(scale * std::max(MEM_REQ_ENCODE.at(ctx->model.type), MEM_REQ_DECODE.at(ctx->model.type)));
+
+    state->buf_scratch[0].resize(MEM_REQ_SCRATCH0.at(ctx->model.type));
+    state->buf_scratch[1].resize(MEM_REQ_SCRATCH1.at(ctx->model.type));
+    state->buf_scratch[2].resize(MEM_REQ_SCRATCH2.at(ctx->model.type));
+    state->buf_scratch[3].resize(MEM_REQ_SCRATCH3.at(ctx->model.type));
+
+    state->rng = std::mt19937(0);
+
+    return state;
+}

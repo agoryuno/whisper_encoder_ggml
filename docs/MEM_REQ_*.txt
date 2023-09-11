@@ -1,0 +1,31 @@
+static const std::map<e_model, size_t> MEM_REQ_KV_SELF = {
+    { MODEL_TINY,      3ull*MB },
+    { MODEL_BASE,      6ull*MB },
+    { MODEL_SMALL,    16ull*MB },
+    { MODEL_MEDIUM,   43ull*MB },
+    { MODEL_LARGE,    71ull*MB },
+};
+
+static const std::map<e_model, size_t> MEM_REQ_KV_CROSS = {
+    { MODEL_TINY,      9ull*MB },
+    { MODEL_BASE,     18ull*MB },
+    { MODEL_SMALL,    53ull*MB },
+    { MODEL_MEDIUM,  141ull*MB },
+    { MODEL_LARGE,   235ull*MB },
+};
+
+static const std::map<e_model, size_t> MEM_REQ_ENCODE = {
+    { MODEL_TINY,     30ull*MB },
+    { MODEL_BASE,     38ull*MB },
+    { MODEL_SMALL,    56ull*MB },
+    { MODEL_MEDIUM,   74ull*MB },
+    { MODEL_LARGE,    94ull*MB },
+};
+
+static const std::map<e_model, size_t> MEM_REQ_DECODE = {
+    { MODEL_TINY,      3ull*MB },
+    { MODEL_BASE,      5ull*MB },
+    { MODEL_SMALL,    10ull*MB },
+    { MODEL_MEDIUM,   18ull*MB },
+    { MODEL_LARGE,    27ull*MB },
+};

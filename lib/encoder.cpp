@@ -717,6 +717,7 @@ static bool encode_internal(
     wstate.use_buf(ctx0, 0);
 
 
+    // Tensor for mels (?)
     struct ggml_tensor * mel = ggml_new_tensor_2d(ctx0, GGML_TYPE_F32, 2*n_ctx, n_mels);
     assert(mel->type == GGML_TYPE_F32);
     {
@@ -776,7 +777,7 @@ static bool encode_internal(
         }
 
         wstate.use_buf(ctx0, 3);
-
+printf("`encode_internal()` [1]\n");
         // ===================================================================
         // NOTE: experimenting with partial evaluation of the encoder (ignore)
         //static int iter = -1;
@@ -795,6 +796,7 @@ static bool encode_internal(
         const size_t e_pe_offset = model.e_pe->ne[0]*ggml_element_size(model.e_pe)*n_ctx*iter;
 
         struct ggml_tensor * e_pe = ggml_view_2d(ctx0, model.e_pe, model.e_pe->ne[0], n_ctx, e_pe_stride, e_pe_offset);
+printf("`encode_internal()` [failure on next line\n");        
         cur = ggml_add(ctx0, e_pe, ggml_transpose(ctx0, cur));
         // ===================================================================
 
@@ -972,7 +974,7 @@ static bool encode_internal(
                                 cur),
                             ggml_repeat(ctx0, layer.mlp_ln_b, cur));
                 }
-printf("`encode_internal()` [1]");
+
 #ifdef WHISPER_USE_FLASH_FF
                 wstate.use_buf(ctx0, 0);
 
@@ -1689,7 +1691,54 @@ struct encoder_context * encoder_init_from_file_no_state(const char * path_model
     return ctx;
 };
 
+struct encoder_kv_cache {
+    struct ggml_tensor * k;
+    struct ggml_tensor * v;
+
+    struct ggml_context * ctx;
+
+    // buf points to the memory allocated for both ggml_tensor 'k' and 'v' (see kv_cache_init)
+    std::vector<uint8_t> buf;
+
+    int n; // number of tokens currently in the cache
+};
+
+static bool kv_cache_init(
+        const struct encoder_hparams & hparams,
+                        const size_t   mem_bytes,
+             struct encoder_kv_cache & cache,
+                           ggml_type   wtype,
+                                 int   n_ctx) {
+    cache.buf.resize(mem_bytes);
+
+    struct ggml_init_params params = {
+        /*.mem_size   =*/ cache.buf.size(),
+        /*.mem_buffer =*/ cache.buf.data(),
+        /*.no_alloc   =*/ false,
+    };
+
+    cache.ctx = ggml_init(params);
+
+    if (!cache.ctx) {
+        log("%s: failed to allocate memory for kv cache\n", __func__);
+        return false;
+    }
+
+    //const int n_text_state = hparams.n_text_state;
+    //const int n_text_layer = hparams.n_text_layer;
+
+    //const int n_mem      = n_text_layer*n_ctx;
+    //const int n_elements = n_text_state*n_mem;
+
+    //cache.k = ggml_new_tensor_1d(cache.ctx, wtype, n_elements);
+    //cache.v = ggml_new_tensor_1d(cache.ctx, wtype, n_elements);
+
+    return true;
+}
+
+
 struct encoder_state * encoder_init_state(encoder_context * ctx) {
+    printf("entered `encoder_init_state()`\n");
     fill_sin_cos_table();
     encoder_state * state = new encoder_state;
 
@@ -1747,6 +1796,7 @@ struct encoder_state * encoder_init_state(encoder_context * ctx) {
     state->decoders[0].logprobs.reserve(ctx->vocab.n_vocab);
     */
     state->buf_compute.resize(scale * std::max(MEM_REQ_ENCODE.at(ctx->model.type), MEM_REQ_DECODE.at(ctx->model.type)));
+    printf("Size of buf_compute: %zu\n", state->buf_compute.size());
 
     state->buf_scratch[0].resize(MEM_REQ_SCRATCH0.at(ctx->model.type));
     state->buf_scratch[1].resize(MEM_REQ_SCRATCH1.at(ctx->model.type));
