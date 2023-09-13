@@ -1094,7 +1094,7 @@ static bool encode_internal(
     //        wstate.get_buf_max_mem(3)/1024.0/1024.0);
 
     // store the result in the state
-    assign_data_to_vector(wstate, *cur);
+    set_encoder_result(wstate, *cur);
     ggml_free(ctx0);
 
     wstate.t_encode_us += ggml_time_us() - t_start_us;
