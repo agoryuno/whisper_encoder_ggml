@@ -1,8 +1,8 @@
 #include <vector>
 #include <cstring> // for memcpy
 
-#include "lib/encoder_state.h"
-#include "lib/ggml.h"
+#include "encoder_state.h"
+#include "ggml.h"
 
 // Overload for F32
 void set_encoder_result(encoder_state& state, const float* data, size_t size) {

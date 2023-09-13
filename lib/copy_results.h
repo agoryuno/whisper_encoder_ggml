@@ -1,6 +1,6 @@
 #pragma once
 #include <cstddef> // for size_t
-#include "lib/encoder_state.h"
+#include "encoder_state.h"
 
 
 void set_encoder_result(encoder_state& state, const float* data, size_t size);

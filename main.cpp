@@ -59,7 +59,13 @@ int main(int argc, char** argv) {
                 1);
     
     std::cout << "res is:" << res << std::endl;
+    std::cout << "embedding: " << ctx->state->encoder_embedding.data() << std::endl;
 
+    for (const auto& value : ctx->state->encoder_embedding) {
+        std::cout << value << ' ';
+    }
+    std::cout << std::endl;
+    
     // Clean up
     // TODO: Release the context if necessary
 
