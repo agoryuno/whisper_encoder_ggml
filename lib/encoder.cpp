@@ -17,6 +17,7 @@
 #include "ggml.h"
 #include "encoder.h"
 #include "encoder_state.h"
+#include "copy_results.h"
 
 
 #if defined(GGML_BIG_ENDIAN)
@@ -736,8 +737,6 @@ static bool encode_internal(
 
     struct ggml_tensor * cur;
 
-    
-
 #ifndef WHISPER_USE_COREML
     const bool use_coreml = false;
 #else
@@ -777,7 +776,6 @@ static bool encode_internal(
         }
 
         wstate.use_buf(ctx0, 3);
-printf("`encode_internal()` [1]\n");
         // ===================================================================
         // NOTE: experimenting with partial evaluation of the encoder (ignore)
         //static int iter = -1;
@@ -796,7 +794,6 @@ printf("`encode_internal()` [1]\n");
         const size_t e_pe_offset = model.e_pe->ne[0]*ggml_element_size(model.e_pe)*n_ctx*iter;
 
         struct ggml_tensor * e_pe = ggml_view_2d(ctx0, model.e_pe, model.e_pe->ne[0], n_ctx, e_pe_stride, e_pe_offset);
-printf("`encode_internal()` [failure on next line]\n");        
         cur = ggml_add(ctx0, e_pe, ggml_transpose(ctx0, cur));
         // ===================================================================
 
@@ -1040,8 +1037,6 @@ printf("`encode_internal()` [failure on next line]\n");
 
         wstate.use_buf(ctx0, -1);
 
-       
-
         // run the computation
         {
             struct ggml_cgraph gf = {};
@@ -1088,56 +1083,6 @@ printf("`encode_internal()` [failure on next line]\n");
         printf("\n");
     }
 
-    // pre-compute cross-attention memory
-    /*
-    {
-        struct ggml_cgraph gf = {};
-
-        // TODO: hack to disconnect the encoded features from the previous graph
-        cur->op = GGML_OP_NONE;
-        cur->src[0] = nullptr;
-        cur->src[1] = nullptr;
-
-        for (int il = 0; il < model.hparams.n_text_layer; ++il) {
-            auto& layer = model.layers_decoder[il];
-
-            wstate.use_buf(ctx0, 0);
-
-            struct ggml_tensor* Kcross = ggml_mul_mat(ctx0,
-                layer.cross_attn_k_w,
-                cur);
-
-            Kcross = ggml_scale_inplace(ctx0, Kcross, ggml_new_f32(ctx0, pow(float(n_state) / n_head, -0.25)));
-
-            wstate.use_buf(ctx0, 1);
-
-            struct ggml_tensor* Vcross = ggml_mul_mat(ctx0,
-                layer.cross_attn_v_w,
-                cur);
-
-            Vcross = ggml_add(ctx0,
-                ggml_repeat(ctx0,
-                    layer.cross_attn_v_b,
-                    Vcross),
-                Vcross);
-
-            wstate.use_buf(ctx0, -1);
-
-            Vcross = ggml_transpose(ctx0, ggml_reshape_2d(ctx0, Vcross, n_state, n_ctx));
-
-            struct ggml_tensor * k = ggml_view_1d(ctx0, wstate.kv_cross.k, n_state*n_ctx, (ggml_element_size(wstate.kv_cross.k)*n_state)*(il*n_ctx));
-            struct ggml_tensor * v = ggml_view_2d(ctx0, wstate.kv_cross.v, n_ctx, n_state,
-                    (   n_ctx)*ggml_element_size(wstate.kv_cross.v),
-                    (il*n_ctx)*ggml_element_size(wstate.kv_cross.v)*n_state);
-
-            ggml_build_forward_expand(&gf, ggml_cpy(ctx0, Kcross, k));
-            ggml_build_forward_expand(&gf, ggml_cpy(ctx0, Vcross, v));
-        }
-
-        ggml_graph_compute_with_ctx(ctx0, &gf, n_threads);
-        //ggml_graph_print(&gf);
-    }
-    */
 
     ////////////////////////////////////////////////////////////////////////////
 
@@ -1148,6 +1093,8 @@ printf("`encode_internal()` [failure on next line]\n");
     //        wstate.get_buf_max_mem(2)/1024.0/1024.0,
     //        wstate.get_buf_max_mem(3)/1024.0/1024.0);
 
+    // store the result in the state
+    assign_data_to_vector(wstate, *cur);
     ggml_free(ctx0);
 
     wstate.t_encode_us += ggml_time_us() - t_start_us;
@@ -1724,15 +1671,6 @@ static bool kv_cache_init(
         return false;
     }
 
-    //const int n_text_state = hparams.n_text_state;
-    //const int n_text_layer = hparams.n_text_layer;
-
-    //const int n_mem      = n_text_layer*n_ctx;
-    //const int n_elements = n_text_state*n_mem;
-
-    //cache.k = ggml_new_tensor_1d(cache.ctx, wtype, n_elements);
-    //cache.v = ggml_new_tensor_1d(cache.ctx, wtype, n_elements);
-
     return true;
 }
 
@@ -1858,14 +1796,6 @@ int encoder_full_with_state(
         }
     }
 
-    /*if (params.token_timestamps) {
-        state->t_beg    = 0;
-        state->t_last   = 0;
-        state->tid_last = 0;
-        if (n_samples > 0) {
-            state->energy = get_signal_energy(samples, n_samples, 32);
-        }
-    }*/
     std::cout << "in `encoder_full_with_state()` (1)..." << std::endl;
 
     const int seek_start = params.offset_ms/10;
@@ -1879,83 +1809,6 @@ int encoder_full_with_state(
         return 0;
     }
     
-    // a set of temperatures to use
-    // [ t0, t0 + delta, t0 + 2*delta, ..., < 1.0f + 1e-6f ]
-    /* std::vector<float> temperatures;
-    if (params.temperature_inc > 0.0f) {
-        for (float t = params.temperature; t < 1.0f + 1e-6f; t += params.temperature_inc) {
-            temperatures.push_back(t);
-        }
-    } else {
-        temperatures.push_back(params.temperature);
-    }*/
-
-    // initialize the decoders
-    /*int n_decoders = 1;
-
-    switch (params.strategy) {
-        case WHISPER_SAMPLING_GREEDY:
-            {
-                n_decoders = params.greedy.best_of;
-            } break;
-        case WHISPER_SAMPLING_BEAM_SEARCH:
-            {
-                n_decoders = std::max(params.greedy.best_of, params.beam_search.beam_size);
-            } break;
-    };
-
-    n_decoders = std::max(1, n_decoders);
-
-    // TAGS: WHISPER_DECODER_INIT
-    for (int j = 1; j < n_decoders; j++) {
-        auto & decoder = state->decoders[j];
-
-        if (decoder.kv_self.ctx == nullptr) {
-            decoder.kv_self = state->decoders[0].kv_self;
-            if (!kv_cache_reinit(decoder.kv_self)) {
-                log("%s: kv_cache_reinit() failed for self-attention, decoder %d\n", __func__, j);
-                return -4;
-            }
-
-            WHISPER_PRINT_DEBUG("%s: initialized self-attention kv cache, decoder %d\n", __func__, j);
-
-            decoder.sequence.tokens.reserve(state->decoders[0].sequence.tokens.capacity());
-
-            decoder.probs.resize   (ctx->vocab.n_vocab);
-            decoder.logits.resize  (ctx->vocab.n_vocab);
-            decoder.logprobs.resize(ctx->vocab.n_vocab);
-        }
-    }
-
-    // the accumulated text context so far
-    auto & prompt_past = state->prompt_past;
-    if (params.no_context) {
-        prompt_past.clear();
-    }
-
-    // prepare prompt
-    {
-        std::vector<whisper_token> prompt_tokens;
-
-        // initial prompt
-        if (!params.prompt_tokens && params.initial_prompt) {
-            prompt_tokens.resize(1024);
-            prompt_tokens.resize(whisper_tokenize(ctx, params.initial_prompt, prompt_tokens.data(), prompt_tokens.size()));
-            params.prompt_tokens   = prompt_tokens.data();
-            params.prompt_n_tokens = prompt_tokens.size();
-        }
-
-        // prepend the prompt tokens to the prompt_past
-        if (params.prompt_tokens && params.prompt_n_tokens > 0) {
-            // parse tokens from the pointer
-            for (int i = 0; i < params.prompt_n_tokens; i++) {
-                prompt_past.push_back(params.prompt_tokens[i]);
-            }
-            std::rotate(prompt_past.begin(), prompt_past.end() - params.prompt_n_tokens, prompt_past.end());
-        }
-    }
-    */
-
     // overwrite audio_ctx, max allowed is hparams.n_audio_ctx
     if (params.audio_ctx > encoder_n_audio_ctx(ctx)) {
         log("%s: audio_ctx is larger than the maximum allowed (%d > %d)\n", 
@@ -1966,79 +1819,20 @@ int encoder_full_with_state(
     }
     state->exp_n_audio_ctx = params.audio_ctx;
 
-    // these tokens determine the task that will be performed
-    /*
-    std::vector<whisper_token> prompt_init = { whisper_token_sot(ctx) };
-    if (whisper_is_multilingual(ctx)) {
-        const int lang_id = whisper_lang_id(params.language);
-        state->lang_id = lang_id;
-        prompt_init.push_back(whisper_token_lang(ctx, lang_id));
-        if (params.translate) {
-            prompt_init.push_back(whisper_token_translate(ctx));
-        } else {
-            prompt_init.push_back(whisper_token_transcribe(ctx));
-        }
-    }
-    */
-
     int seek = seek_start;
 
-    /*
-    std::vector<whisper_token> prompt;
-    prompt.reserve(whisper_n_text_ctx(ctx));
-    */
+    // if only 1 second left, then stop
+    printf("current seek = %d, seek_end = %d\n", seek, seek_end);
+    if (seek + 100 >= seek_end) {
+        return 0;
+    }
 
-    // beam-search helpers
-    /*
-    struct kv_buf {
-        std::vector<uint8_t> k;
-        std::vector<uint8_t> v;
-    };
+    // encode audio features starting at offset seek
+    if (!encode_internal(*ctx, *state, seek, params.n_threads)) {
+        log("%s: failed to encode\n", __func__);
+        return -6;
+    }
 
-    std::vector<kv_buf> kv_bufs;
-
-    struct beam_candidate {
-        int decoder_idx;
-        int seek_delta;
-
-        bool has_ts;
-
-        whisper_sequence sequence;
-    };
-
-    std::vector<beam_candidate> beam_candidates;
-    */
-
-    // main loop
-    while (true) {
-        /*if (params.progress_callback) {
-            const int progress_cur = (100*(seek - seek_start))/(seek_end - seek_start);
-
-            params.progress_callback(
-                ctx, ctx->state, progress_cur, params.progress_callback_user_data);
-        }*/
-
-        // if only 1 second left, then stop
-        if (seek + 100 >= seek_end) {
-            break;
-        }
-
-        /*
-        if (params.encoder_begin_callback) {
-            if (params.encoder_begin_callback(ctx, state, params.encoder_begin_callback_user_data) == false) {
-                log("%s: encoder_begin_callback returned false - aborting\n", __func__);
-                break;
-            }
-        }
-        */
-
-        // encode audio features starting at offset seek
-        if (!encode_internal(*ctx, *state, seek, params.n_threads)) {
-            log("%s: failed to encode\n", __func__);
-            return -6;
-        }
-
-    }        
 
     return 0;
 
@@ -2051,6 +1845,7 @@ int encoder_full(
                    const float * samples,
                            int   n_samples) {
     std::cout << "entered `encoder_full()`" << std::endl;
+    
     return encoder_full_with_state(ctx, ctx->state, params, samples, n_samples);
 }
 
@@ -2090,15 +1885,13 @@ int encoder_full_parallel(
 
         params_cur.offset_ms = 0;
         params_cur.print_progress = false;
-        //params_cur.print_realtime = false;
 
-        //params_cur.new_segment_callback = nullptr;
-        //params_cur.new_segment_callback_user_data = nullptr;
-
-        //params_cur.progress_callback = nullptr;
-        //params_cur.progress_callback_user_data = nullptr;
-
-        workers[i] = std::thread(encoder_full_with_state, ctx, states[i], std::move(params_cur), samples + start_samples, n_samples_cur);
+        workers[i] = std::thread(encoder_full_with_state, 
+                                 ctx, 
+                                 states[i], 
+                                 std::move(params_cur), 
+                                 samples + start_samples, 
+                                 n_samples_cur);
     }
 
     {
@@ -2108,7 +1901,13 @@ int encoder_full_parallel(
         //params_cur.print_realtime = false;
 
         // Run the first transformation using default state but only for the first chunk.
-        ret = encoder_full_with_state(ctx, ctx->state, std::move(params_cur), samples, offset_samples + n_samples_per_processor);
+        ret = encoder_full_with_state( 
+                                       ctx, 
+                                       ctx->state, 
+                                       std::move(params_cur),
+                                       samples, 
+                                       offset_samples + n_samples_per_processor
+                                       );
     }
 
     for (int i = 0; i < n_processors - 1; ++i) {
@@ -2120,33 +1919,7 @@ int encoder_full_parallel(
     // combine results into result_state->result_all from all other states
     
     for (int i = 0; i < n_processors - 1; ++i) {
-    /*
-        auto& results_i = states[i]->result_all;
-
-        for (auto& result : results_i) {
-            // correct the segment timestamp taking into account the offset
-            result.t0 += 100 * ((i + 1) * n_samples_per_processor) / WHISPER_SAMPLE_RATE + offset_t;
-            result.t1 += 100 * ((i + 1) * n_samples_per_processor) / WHISPER_SAMPLE_RATE + offset_t;
-
-            // make sure that segments are not overlapping
-            if (!ctx->state->result_all.empty()) {
-                result.t0 = std::max(result.t0, ctx->state->result_all.back().t1);
-            }
-
-            ctx->state->result_all.push_back(std::move(result));
-
-            // call the new_segment_callback for each segment
-            if (params.new_segment_callback) {
-                params.new_segment_callback(ctx, ctx->state, 1, params.new_segment_callback_user_data);
-            }
-        }
-
-        ctx->state->t_mel_us += states[i]->t_mel_us;
-
-        ctx->state->t_sample_us += states[i]->t_sample_us;
-        ctx->state->t_encode_us += states[i]->t_encode_us;
-        ctx->state->t_decode_us += states[i]->t_decode_us;
-    */
+    
         encoder_free_state(states[i]);
     }
 

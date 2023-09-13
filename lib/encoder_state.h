@@ -172,6 +172,9 @@ struct encoder_state {
     // work container used to avoid memory allocations
     //std::vector<std::pair<double, whisper_vocab::id>> logits_id;
 
+    // a vector to store the resulting embedding vector
+    std::vector<float> encoder_embedding;
+
     mutable std::mt19937 rng; // used for sampling at t > 0.0
 
     //int lang_id = 0; // english by default
