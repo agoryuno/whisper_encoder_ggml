@@ -610,7 +610,9 @@ int whisper_pcm_to_mel_with_state(
                 ctx->model.filters, 
                 false, 
                 state->mel)) {
-        log("%s: failed to compute mel spectrogram\n", __func__);
+        #ifdef ENCODER_LOG
+            log("%s: failed to compute mel spectrogram\n", __func__);
+        #endif
         return -1;
     }
 
@@ -1087,7 +1089,9 @@ static bool encode_internal(
 
 static bool encoder_model_load(struct encoder_model_loader * loader, 
                                encoder_context & wctx) {
-    log("%s: loading model\n", __func__);
+    #ifdef ENCODER_LOG
+        log("%s: loading model\n", __func__);
+    #endif
 
     const int64_t t_start_us = ggml_time_us();
 
@@ -1116,7 +1120,6 @@ static bool encoder_model_load(struct encoder_model_loader * loader,
         read_safe(loader, hparams.n_mels);
         read_safe(loader, hparams.ftype);
 
-        printf("hprams.n_audio_layer = %d\n", hparams.n_audio_layer);
         if (hparams.n_audio_layer == 4) {
             model.type = e_model::MODEL_TINY;
         }
@@ -1155,16 +1158,18 @@ static bool encoder_model_load(struct encoder_model_loader * loader,
         }
 
         const size_t scale = model.hparams.ftype ? 1 : 2;
+        
+        #ifdef ENCODER_LOG
+            log("%s: n_audio_ctx   = %d\n", __func__, hparams.n_audio_ctx);
+            log("%s: n_audio_state = %d\n", __func__, hparams.n_audio_state);
+            log("%s: n_audio_head  = %d\n", __func__, hparams.n_audio_head);
+            log("%s: n_audio_layer = %d\n", __func__, hparams.n_audio_layer);
+            log("%s: n_mels        = %d\n", __func__, hparams.n_mels);
+            log("%s: ftype         = %d\n", __func__, model.hparams.ftype);
+            log("%s: qntvr         = %d\n", __func__, qntvr);
+            log("%s: type          = %d\n", __func__, model.type);
+            log("%s: wctx.wtype    = %d\n", __func__, wctx.wtype);
 
-        log("%s: n_audio_ctx   = %d\n", __func__, hparams.n_audio_ctx);
-        log("%s: n_audio_state = %d\n", __func__, hparams.n_audio_state);
-        log("%s: n_audio_head  = %d\n", __func__, hparams.n_audio_head);
-        log("%s: n_audio_layer = %d\n", __func__, hparams.n_audio_layer);
-        log("%s: n_mels        = %d\n", __func__, hparams.n_mels);
-        log("%s: ftype         = %d\n", __func__, model.hparams.ftype);
-        log("%s: qntvr         = %d\n", __func__, qntvr);
-        log("%s: type          = %d\n", __func__, model.type);
-        log("%s: wctx.wtype    = %d\n", __func__, wctx.wtype);
 
         // print memory requirements
         {
@@ -1185,6 +1190,7 @@ static bool encoder_model_load(struct encoder_model_loader * loader,
             log("%s: mem required  = %7.2f MB (+ %7.2f MB per decoder)\n", __func__,
                     mem_required / 1024.0 / 1024.0, mem_required_decoder / 1024.0 / 1024.0);
         }
+        #endif
 
         // initialize all memory buffers
         // always have at least one decoder
@@ -1272,8 +1278,9 @@ static bool encoder_model_load(struct encoder_model_loader * loader,
         }
 
         ctx_size += (15 + 15*n_audio_layer)*512; 
-
-        log("%s: model ctx     = %7.2f MB\n", __func__, ctx_size/(1024.0*1024.0));
+        #ifdef ENCODER_LOG
+            log("%s: model ctx     = %7.2f MB\n", __func__, ctx_size/(1024.0*1024.0));
+        #endif
     }
 
     
@@ -1291,7 +1298,9 @@ static bool encoder_model_load(struct encoder_model_loader * loader,
 
         model.ctx = ggml_init(params);
         if (!model.ctx) {
-            log("%s: ggml_init() failed\n", __func__);
+            #ifdef ENCODER_LOG
+                log("%s: ggml_init() failed\n", __func__);
+            #endif
             return false;
         }
     }
@@ -1562,8 +1571,9 @@ void encoder_free(struct encoder_context * ctx) {
 
 
 struct encoder_context * encoder_init_from_file_no_state(const char * path_model) {
-
-    log("%s: loading model from '%s'\n", __func__, path_model);
+    #ifdef ENCODER_LOG
+        log("%s: loading model from '%s'\n", __func__, path_model);
+    #endif
 
     auto fin = std::ifstream(path_model, std::ios::binary);
     if (!fin) {
@@ -1696,7 +1706,6 @@ struct encoder_state * encoder_init_state(encoder_context * ctx) {
     state->decoders[0].logprobs.reserve(ctx->vocab.n_vocab);
     */
     state->buf_compute.resize(scale * std::max(MEM_REQ_ENCODE.at(ctx->model.type), MEM_REQ_DECODE.at(ctx->model.type)));
-    printf("Size of buf_compute: %zu\n", state->buf_compute.size());
 
     state->buf_scratch[0].resize(MEM_REQ_SCRATCH0.at(ctx->model.type));
     state->buf_scratch[1].resize(MEM_REQ_SCRATCH1.at(ctx->model.type));
