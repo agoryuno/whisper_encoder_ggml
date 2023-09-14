@@ -32,22 +32,16 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    std::cout << "Successfully initialized whisper context from file: " << model_path << std::endl;
 
     std::vector<float> pcmf32;               // mono-channel F32 PCM
     std::vector<std::vector<float>> pcmf32s; // stereo-channel F32 PCM
-
-    std::cout << "audio vectors created" << std::endl;
 
     if (!::read_wav(fname_inp, pcmf32, pcmf32s, false)) {
         fprintf(stderr, "error: failed to read WAV file '%s'\n", fname_inp);
     }
 
-    std::cout << "WAV read successfully" << std::endl;
-
     encoder_full_params eparams = encoder_full_default_params();
 
-    std::cout << "params created successfully" << std::endl;
 
     // TODO: Use the context for something
 
@@ -58,8 +52,6 @@ int main(int argc, char** argv) {
                 pcmf32.size(),
                 1);
     
-    std::cout << "res is:" << res << std::endl;
-    std::cout << "embedding: " << ctx->state->encoder_embedding.data() << std::endl;
 
     for (const auto& value : ctx->state->encoder_embedding) {
         std::cout << value << ' ';

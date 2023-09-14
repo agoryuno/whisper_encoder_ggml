@@ -11,3 +11,4 @@ lib/encoder_utils.o
 encoder-out.txt
 ggml-model-tiny.bin
 lib/copy_results.o
+encoder-cli
