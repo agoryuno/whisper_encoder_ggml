@@ -1042,18 +1042,18 @@ static bool encode_internal(
 #endif
 
     // cur
-    {
-        printf("ne0 = %ld\n", cur->ne[0]);
-        printf("ne1 = %ld\n", cur->ne[1]);
-        for (int i = 0; i < 10; ++i) {
-            printf("%8.4f ", ((float *)(cur->data))[i]);
+    #ifdef ENCODER_LOG
+        {
+            for (int i = 0; i < 10; ++i) {
+                printf("%8.4f ", ((float *)(cur->data))[i]);
+            }
+            printf("... ");
+            for (int i = cur->ne[0] - 10; i < cur->ne[0]; ++i) {
+                printf("%8.4f ", ((float *)(cur->data))[i]);
+            }
+            printf("\n");
         }
-        printf("... ");
-        for (int i = cur->ne[0] - 10; i < cur->ne[0]; ++i) {
-            printf("%8.4f ", ((float *)(cur->data))[i]);
-        }
-        printf("\n");
-    }
+    #endif
 
 
     ////////////////////////////////////////////////////////////////////////////
@@ -1513,8 +1513,9 @@ static bool encoder_model_load(struct encoder_model_loader * loader,
             total_size += ggml_nbytes(tensor);
             model.n_loaded++;
         }
-
-        log("%s: model size    = %7.2f MB\n", __func__, total_size/1024.0/1024.0);
+        #ifdef ENCODER_LOG
+            log("%s: model size    = %7.2f MB\n", __func__, total_size/1024.0/1024.0);
+        #endif
 
         if (model.n_loaded == 0) {
             log("%s: WARN no tensors loaded from model file - assuming empty model for testing\n", __func__);
@@ -1648,7 +1649,6 @@ static bool kv_cache_init(
 
 
 struct encoder_state * encoder_init_state(encoder_context * ctx) {
-    printf("entered `encoder_init_state()`\n");
     fill_sin_cos_table();
     encoder_state * state = new encoder_state;
 
@@ -1786,7 +1786,6 @@ int encoder_full_with_state(
     int seek = seek_start;
 
     // if only 1 second left, then stop
-    printf("current seek = %d, seek_end = %d\n", seek, seek_end);
     if (seek + 100 >= seek_end) {
         return 0;
     }
