@@ -4,7 +4,9 @@ This is a stripped down version of [whisper.cpp](https://github.com/ggerganov/wh
 
 To build execute `./build`.
 
-To run (first see model file prep instructions below) do: `encoder-cli model-file.pth audio-file.wav`
+To run the executable (first see model file prep instructions below) do: `encoder-cli model-file.pth audio-file.wav`
+
+The `encoder-cli` executable returns a JSON-formatted string to stdout.
 
 Note that the encoder will ignore audio files that are less than 1 second in duration.
 
