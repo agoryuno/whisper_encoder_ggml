@@ -449,10 +449,6 @@ static void log_mel_spectrogram_worker_thread(
 }
 
 
-
-
-
-
 // ref: https://github.com/openai/whisper/blob/main/whisper/audio.py#L110-L157
 static bool log_mel_spectrogram(
               encoder_state & estate,
@@ -467,9 +463,6 @@ static bool log_mel_spectrogram(
               const bool   debug,
               encoder_mel & mel) {
 
-    std::cout << "entered `log_mel_spectrogram()`" << std::endl;
-    std::cout << "Is mel initialized? : " << &mel << std::endl;
-
     const int64_t t_start_us = ggml_time_us();
 
     // Hanning window (Use cosf to eliminate difference)
@@ -477,9 +470,6 @@ static bool log_mel_spectrogram(
     // ref: https://github.com/openai/whisper/blob/main/whisper/audio.py#L147
     std::vector<float> hann;
     hann_window(frame_size, true, hann);
-
-    std::cout << "`hann_window()` computed" << std::endl;
-
 
     // Calculate the length of padding
     int64_t stage_1_pad = ENCODER_SAMPLE_RATE * 30;
@@ -490,26 +480,15 @@ static bool log_mel_spectrogram(
     samples_padded.resize(n_samples + stage_1_pad + stage_2_pad * 2);
     std::copy(samples, samples + n_samples, samples_padded.begin() + stage_2_pad);
 
-    std::cout << "vector initialized and data copied" << std::endl;
-
     // pad 30 seconds of zeros at the end of audio (480,000 samples) + reflective pad 200 samples at the end of audio
     std::fill(samples_padded.begin() + n_samples + stage_2_pad, samples_padded.begin() + n_samples + stage_1_pad + 2 * stage_2_pad, 0);
-
-    std::cout << "audio padded at end" << std::endl;
 
     // reflective pad 200 samples at the beginning of audio
     std::reverse_copy(samples + 1, samples + 1 + stage_2_pad, samples_padded.begin());
 
-    std::cout << "audio padded at beginning" << std::endl;
-
-    std::cout << "mel.n_len: " << mel.n_len << std::endl;
-    std::cout << "mel.n_mel: " << mel.n_mel << std::endl;
-    
     // Add more based on the properties of mel
 
     mel.n_mel = n_mel;
-
-    std::cout << "`mel.n_mel` set" << std::endl;
 
     // https://github.com/pytorch/pytorch/blob/main/aten/src/ATen/native/SpectralOps.cpp#L936
     // Calculate number of frames + remove the last frame
@@ -517,11 +496,7 @@ static bool log_mel_spectrogram(
     // Calculate semi-padded sample length to ensure compatibility
     mel.n_len_org = 1 + (n_samples + stage_2_pad - frame_size) / frame_step;
 
-    std::cout << "resizing `mel.data`..." << std::endl;
-
     mel.data.resize(mel.n_mel * mel.n_len);
-
-    std::cout << "mel length calculated" << std::endl;
 
     {
         std::vector<std::thread> workers(n_threads - 1);
@@ -624,10 +599,6 @@ int whisper_pcm_to_mel_with_state(
             int n_samples, 
             int n_threads) {
 
-    std::cout << "entered `whisper_pcm_to_mel_with_state`" << std::endl;
-    std::cout << "`&state` = " << &state << std::endl;
-    std::cout << "`state->mel` = " << state->mel.n_mel << std::endl;
-
     if (!log_mel_spectrogram(
                 *state, samples, 
                 n_samples, 
@@ -692,7 +663,6 @@ static bool encode_internal(
               const int   mel_offset,
               const int   n_threads) {
 
-     std::cout << "entered `encode_internal`" << std::endl;
     const int64_t t_start_us = ggml_time_us();
 
     const auto & model   = wctx.model;
@@ -1118,8 +1088,6 @@ static bool encode_internal(
 static bool encoder_model_load(struct encoder_model_loader * loader, 
                                encoder_context & wctx) {
     log("%s: loading model\n", __func__);
-
-    std::cout << "entered `encoder_model_load()`" << std::endl;
 
     const int64_t t_start_us = ggml_time_us();
 
@@ -1556,8 +1524,6 @@ static bool encoder_model_load(struct encoder_model_loader * loader,
 
 struct encoder_context * encoder_init_no_state(struct encoder_model_loader * loader) {
 
-    std::cout << "entered `encoder_init_no_state()`" << std::endl;
-
     ggml_time_init();
 
     #ifdef DEBUG_MODE
@@ -1597,8 +1563,6 @@ void encoder_free(struct encoder_context * ctx) {
 
 struct encoder_context * encoder_init_from_file_no_state(const char * path_model) {
 
-    std::cout << "entered `encoder_init_from_file_no_state()`" << std::endl;
-
     log("%s: loading model from '%s'\n", __func__, path_model);
 
     auto fin = std::ifstream(path_model, std::ios::binary);
@@ -1632,8 +1596,6 @@ struct encoder_context * encoder_init_from_file_no_state(const char * path_model
     if (ctx) {
         ctx->path_model = path_model;
     }
-
-    std::cout << "`ctx->state`:" << ctx->state << std::endl;
 
     return ctx;
 };
@@ -1772,18 +1734,13 @@ int encoder_full_with_state(
     //auto & result_all = state->result_all;
 
     //result_all.clear();
-    std::cout << "entered `encoder_full_with_state()`" << std::endl;
-
     if (n_samples > 0) {
-        std::cout << "`n_samples` > 0" << std::endl;
         // compute log mel spectrogram
         if (params.speed_up) {
-            std::cout << "`params.speed_up` is true" << std::endl;
             // TODO: Replace PV with more advanced algorithm
             log("%s: failed to compute log mel spectrogram\n", __func__);
             return -1;
         } else {
-            std::cout << "`params.speed_up` is false" << std::endl;
             if (whisper_pcm_to_mel_with_state(
                             ctx, 
                             state, 
@@ -1796,7 +1753,6 @@ int encoder_full_with_state(
         }
     }
 
-    std::cout << "in `encoder_full_with_state()` (1)..." << std::endl;
 
     const int seek_start = params.offset_ms/10;
     const int seek_end = params.duration_ms == 0 ? encoder_n_len_from_state(state) : seek_start + params.duration_ms/10;
@@ -1805,7 +1761,6 @@ int encoder_full_with_state(
     // basically don't process anything that is less than 1.0s
     // see issue #39: https://github.com/ggerganov/whisper.cpp/issues/39
     if (seek_end < seek_start + (params.speed_up ? 50 : 100)) {
-        std::cout << "seek_end = " << seek_end << ", seek_start = " << seek_start << std::endl;
         return 0;
     }
     
@@ -1844,8 +1799,6 @@ int encoder_full(
     struct encoder_full_params   params,
                    const float * samples,
                            int   n_samples) {
-    std::cout << "entered `encoder_full()`" << std::endl;
-    
     return encoder_full_with_state(ctx, ctx->state, params, samples, n_samples);
 }
 
@@ -1856,8 +1809,6 @@ int encoder_full_parallel(
         const float * samples,
         int n_samples,
         int n_processors) {
-
-    std::cout << "entered `encoder_full_paralle()" << std::endl;
 
     if (n_processors == 1) {
         return encoder_full(ctx, params, samples, n_samples);

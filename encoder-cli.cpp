@@ -3,6 +3,8 @@
 #include <vector>
 #include <algorithm>
 #include <cctype>
+#include <sstream>
+
 #include "lib/encoder.h"
 
 int main(int argc, char** argv) {
@@ -53,13 +55,22 @@ int main(int argc, char** argv) {
                 1);
     
 
-    for (const auto& value : ctx->state->encoder_embedding) {
-        std::cout << value << ' ';
+    std::ostringstream json_output;
+    json_output << "{";
+    json_output << "\"return_code\": " << (res ? 0 : 1) << ", ";
+    json_output << "\"embedding\": [";
+
+    if (res == 0) {
+        for (size_t i = 0; i < ctx->state->encoder_embedding.size(); ++i) {
+            json_output << ctx->state->encoder_embedding[i];
+            if (i < ctx->state->encoder_embedding.size() - 1) {
+                json_output << ", ";
+            }
+        }
     }
-    std::cout << std::endl;
-    
-    // Clean up
-    // TODO: Release the context if necessary
+
+    json_output << "]}";
+    std::cout << json_output.str() << std::endl;
 
     return res;
 }
