@@ -1318,7 +1318,6 @@ static bool encoder_model_load(struct encoder_model_loader * loader,
         const int n_mels = hparams.n_mels;
 
         model.layers_encoder.resize(n_audio_layer);
-        // model.layers_decoder.resize(n_text_layer);
         
         #ifdef DEBUG_MODE
             printf("`%s`: starting encoder conversion.\n", __func__);
