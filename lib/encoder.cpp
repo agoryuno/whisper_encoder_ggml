@@ -1228,15 +1228,13 @@ static bool encoder_model_load(struct encoder_model_loader * loader,
     {
         const auto & hparams = model.hparams;
 
-        // const int n_vocab = hparams.n_vocab;
-
         const int n_audio_ctx   = hparams.n_audio_ctx;
         const int n_audio_state = hparams.n_audio_state;
         const int n_audio_layer = hparams.n_audio_layer;
         const int n_mels = hparams.n_mels;
 
         // encoder
-
+        #ifdef ENCODER_LOG
         {
             ctx_size += n_audio_ctx*n_audio_state*ggml_type_sizef(GGML_TYPE_F32); // e_pe;
 
@@ -1278,7 +1276,7 @@ static bool encoder_model_load(struct encoder_model_loader * loader,
         }
 
         ctx_size += (15 + 15*n_audio_layer)*512; 
-        #ifdef ENCODER_LOG
+        
             log("%s: model ctx     = %7.2f MB\n", __func__, ctx_size/(1024.0*1024.0));
         #endif
     }
